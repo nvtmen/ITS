@@ -10,6 +10,9 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  Modal,
+  Share,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +34,58 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | 'all'>('all');
   const [selectedOwner, setSelectedOwner] = useState<OwnerType | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all');
+  const [showListModal, setShowListModal] = useState<boolean>(false);
+
+  // Evdeki tüm ilaçların tek satır, alfabetik ve benzersiz isim listesi
+  const cabinetMedicationNames = useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    const sorted = [...products].sort((a, b) =>
+      a.name.localeCompare(b.name, 'tr', { sensitivity: 'base' })
+    );
+    for (const p of sorted) {
+      const trimmed = p.name.trim();
+      if (trimmed && !seen.has(trimmed.toLowerCase())) {
+        seen.add(trimmed.toLowerCase());
+        names.push(trimmed);
+      }
+    }
+    return names;
+  }, [products]);
+
+  // "Anlık Ecza Dolabımız" başlığı ile paylaşma
+  const handleShareCabinetList = async () => {
+    if (cabinetMedicationNames.length === 0) {
+      Alert.alert('Bilgi', 'Dolabınızda henüz kayıtlı ilaç bulunmuyor.');
+      return;
+    }
+
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    const itemsText = cabinetMedicationNames
+      .map((name, index) => `${index + 1}. ${name}`)
+      .join('\n');
+
+    const shareContent = `📋 Anlık Ecza Dolabımız\n📅 Tarih: ${day}.${month}.${year} ${time}\n💊 Toplam: ${cabinetMedicationNames.length} İlaç\n\n${itemsText}\n\nSağlıklı günler dileriz! 🌿`;
+
+    try {
+      await Share.share(
+        {
+          title: 'Anlık Ecza Dolabımız',
+          message: shareContent,
+        },
+        {
+          dialogTitle: 'Anlık Ecza Dolabımız - İlaç Listesini Paylaş',
+        }
+      );
+    } catch (error) {
+      console.error('Paylaşım hatası:', error);
+    }
+  };
 
   // Helper for Turkish character normalization in search
   const normalizeTr = (str: string) =>
@@ -143,10 +198,14 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           </View>
         </View>
 
-        <View style={styles.productCountPill}>
-          <Ionicons name="bandage-outline" size={14} color="#0284C7" />
+        <TouchableOpacity
+          style={styles.productCountPill}
+          onPress={() => setShowListModal(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="receipt-outline" size={14} color="#0284C7" />
           <Text style={styles.productCountText}>{products.length} İlaç</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {/* Critical Expired Medicines Alert Banner */}
@@ -170,6 +229,29 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         selectedFilter={statusFilter}
         onSelectFilter={setStatusFilter}
       />
+
+      {/* Evdeki İlaç Listesini Göster Buton / Banner */}
+      <TouchableOpacity
+        style={styles.showCabinetListBtn}
+        onPress={() => setShowListModal(true)}
+        activeOpacity={0.85}
+      >
+        <View style={styles.showCabinetListBtnLeft}>
+          <View style={styles.showCabinetListIconBox}>
+            <Ionicons name="receipt-outline" size={18} color="#0284C7" />
+          </View>
+          <View style={styles.showCabinetListTextGroup}>
+            <Text style={styles.showCabinetListBtnTitle}>Evdeki İlaç Listesini Göster</Text>
+            <Text style={styles.showCabinetListBtnSub}>
+              Tek satır ilaç adları • Anlık Ecza Dolabımız olarak paylaş
+            </Text>
+          </View>
+        </View>
+        <View style={styles.showCabinetListBadge}>
+          <Text style={styles.showCabinetListBadgeText}>{cabinetMedicationNames.length} İlaç</Text>
+          <Ionicons name="chevron-forward" size={14} color="#0284C7" />
+        </View>
+      </TouchableOpacity>
 
       {/* Family Member (Owner) Filter Bar */}
       <View style={styles.ownerFilterSection}>
@@ -323,6 +405,93 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           showsVerticalScrollIndicator={false}
         />
       )}
+
+      {/* Evdeki İlaç Listesi Modalı (Tek satır sadece ilaç adları ve altta Paylaş butonu) */}
+      <Modal
+        visible={showListModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowListModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheetContainer}>
+            {/* Modal Üst Başlık */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleGroup}>
+                <View style={styles.modalIconBox}>
+                  <Ionicons name="receipt" size={20} color="#0284C7" />
+                </View>
+                <View>
+                  <Text style={styles.modalTitle}>Anlık Ecza Dolabımız</Text>
+                  <Text style={styles.modalSubTitle}>
+                    {cabinetMedicationNames.length} Farklı İlaç (A'dan Z'ye Sıralı)
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShowListModal(false)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close-circle" size={26} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Bilgilendirme Notu */}
+            <View style={styles.modalHintBar}>
+              <Ionicons name="information-circle-outline" size={14} color="#0369A1" />
+              <Text style={styles.modalHintText}>
+                Dolabınızda mevcut ilaçlar tek satır halinde listelenmiştir.
+              </Text>
+            </View>
+
+            {/* Tek Satır İlaç Adları Listesi */}
+            {cabinetMedicationNames.length === 0 ? (
+              <View style={styles.modalEmptyWrap}>
+                <Ionicons name="medkit-outline" size={48} color="#CBD5E1" />
+                <Text style={styles.modalEmptyTitle}>Dolapta Henüz İlaç Yok</Text>
+                <Text style={styles.modalEmptySub}>
+                  İlaç ekledikçe burada tek satır halinde listelenecektir.
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={cabinetMedicationNames}
+                keyExtractor={(item, index) => `${item}_${index}`}
+                showsVerticalScrollIndicator={true}
+                style={styles.modalFlatList}
+                contentContainerStyle={styles.modalFlatListContent}
+                renderItem={({ item, index }) => (
+                  <View style={styles.singleRowItem}>
+                    <View style={styles.singleRowIndexBox}>
+                      <Text style={styles.singleRowIndexText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.singleRowMedicineName} numberOfLines={1} ellipsizeMode="tail">
+                      {item}
+                    </Text>
+                  </View>
+                )}
+              />
+            )}
+
+            {/* Modal Alt Kısım: Paylaş Butonu */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[
+                  styles.modalShareBtn,
+                  cabinetMedicationNames.length === 0 && styles.modalShareBtnDisabled,
+                ]}
+                onPress={handleShareCabinetList}
+                disabled={cabinetMedicationNames.length === 0}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
+                <Text style={styles.modalShareBtnText}>Paylaş (Anlık Ecza Dolabımız)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -555,5 +724,229 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: '700',
     fontSize: 12,
+  },
+  showCabinetListBtn: {
+    marginHorizontal: 16,
+    marginVertical: 5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  showCabinetListBtnLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  showCabinetListIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#E0F2FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  showCabinetListTextGroup: {
+    flex: 1,
+  },
+  showCabinetListBtnTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  showCabinetListBtnSub: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  showCabinetListBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  showCabinetListBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
+  },
+  modalSheetContainer: {
+    width: '100%',
+    maxHeight: '82%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalHeaderTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  modalIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#E0F2FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 16.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalSubTitle: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#0284C7',
+    marginTop: 1,
+  },
+  modalCloseBtn: {
+    padding: 2,
+  },
+  modalHintBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F9FF',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  modalHintText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0369A1',
+    flex: 1,
+  },
+  modalEmptyWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+  },
+  modalEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#334155',
+    marginTop: 10,
+  },
+  modalEmptySub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  modalFlatList: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  modalFlatListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 16,
+  },
+  singleRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+    borderRadius: 8,
+    gap: 10,
+  },
+  singleRowIndexBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  singleRowIndexText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  singleRowMedicineName: {
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalFooter: {
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
+  },
+  modalShareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0284C7',
+    paddingVertical: 13,
+    borderRadius: 14,
+    gap: 8,
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  modalShareBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+  },
+  modalShareBtnText: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
