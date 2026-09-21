@@ -1,0 +1,54 @@
+{
+  "expo": {
+    "name": "Ecza Dolabım",
+    "slug": "ecza-dolabim",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.nvt.eczadolabim",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#E0F2FE",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "İlaç barkod ve karekodlarını (İTS) taramak için kamera iznine ihtiyaç vardır.",
+          "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#10B981"
+        }
+      ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/5043b071-e9d2-4a92-bab2-690fdbbd8570"
+    },
+    "runtimeVersion": "1.0.2",
+    "extra": {
+      "eas": {
+        "projectId": "5043b071-e9d2-4a92-bab2-690fdbbd8570"
+      }
+    }
+  }
+}
