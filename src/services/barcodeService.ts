@@ -21,6 +21,8 @@ export interface BarcodeLookupResult {
   quantity?: number;
   expiryDate?: string; // YYYY-MM-DD (extracted from ITS DataMatrix if present)
   batchNumber?: string;
+  serialNumber?: string;
+  rawCode?: string;
   storageCondition?: StorageCondition;
   storageTip?: string;
   prospectusUrl?: string;
@@ -718,6 +720,9 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
             prospectusUrl: item.prospectusUrl || getProspectusSearchUrl(item.name),
             expiryDate: itsParsed.expiryDate,
             batchNumber: itsParsed.batchNumber,
+            serialNumber: itsParsed.serialNumber,
+            rawCode: scannedText.trim(),
+            barcode: itsParsed.gtin || clean,
             source: 'local_med_catalog',
           };
         }
@@ -731,6 +736,10 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
   for (const key of lookupKeys) {
     if (POPULAR_MEDICATIONS[key]) {
       const med = POPULAR_MEDICATIONS[key];
+      const cleanGtin = itsParsed.gtin
+        ? (itsParsed.gtin.startsWith('0') ? itsParsed.gtin.substring(1) : itsParsed.gtin)
+        : (clean.length === 13 || clean.length === 14 ? (clean.startsWith('0') ? clean.substring(1) : clean) : clean);
+
       return {
         found: true,
         name: med.name,
@@ -742,7 +751,11 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
         prospectusUrl: med.prospectusUrl,
         expiryDate: itsParsed.expiryDate,
         batchNumber: itsParsed.batchNumber,
+        serialNumber: itsParsed.serialNumber,
+        rawCode: scannedText.trim(),
+        barcode: cleanGtin,
         indication: detectIndication(med.name, med.category),
+        isItsDataMatrix: itsParsed.isItsDataMatrix,
         source: itsParsed.isItsDataMatrix ? 'its_datamatrix' : 'popular_med_db',
       };
     }
@@ -782,6 +795,8 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
         prospectusUrl: getProspectusSearchUrl(matched.name),
         expiryDate: itsParsed.expiryDate,
         batchNumber: itsParsed.batchNumber,
+        serialNumber: itsParsed.serialNumber,
+        rawCode: scannedText.trim(),
         barcode: cleanGtin,
         indication: detectIndication(matched.name, resolvedCategory),
         isItsDataMatrix: itsParsed.isItsDataMatrix,
@@ -802,6 +817,8 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
       name: '',
       expiryDate: itsParsed.expiryDate,
       batchNumber: itsParsed.batchNumber,
+      serialNumber: itsParsed.serialNumber,
+      rawCode: scannedText.trim(),
       category: 'painkiller',
       unit: 'kutu',
       quantity: 1,
@@ -811,5 +828,13 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
     };
   }
 
-  return { found: false };
+  return {
+    found: false,
+    barcode: clean,
+    rawCode: scannedText.trim(),
+    serialNumber: itsParsed.serialNumber,
+    batchNumber: itsParsed.batchNumber,
+    expiryDate: itsParsed.expiryDate,
+    isItsDataMatrix: itsParsed.isItsDataMatrix,
+  };
 }

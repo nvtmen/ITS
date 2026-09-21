@@ -54,7 +54,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
   navigation,
   route,
 }) => {
-  const { addProduct, updateProduct } = useProducts();
+  const { products, addProduct, updateProduct } = useProducts();
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const isEditing = !!editingProduct;
 
@@ -73,6 +73,9 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
   const [indication, setIndication] = useState<string>(''); // Ne için kullanılır?
   const [imageUrl, setImageUrl] = useState<string>(''); // Kutu resmi
   const [prospectusUrl, setProspectusUrl] = useState<string>('');
+  const [batchNumber, setBatchNumber] = useState<string>('');
+  const [serialNumber, setSerialNumber] = useState<string>('');
+  const [rawCode, setRawCode] = useState<string>('');
 
   // Scanner and Lookup states
   const [scannerVisible, setScannerVisible] = useState<boolean>(false);
@@ -93,6 +96,9 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     setIndication('');
     setImageUrl('');
     setProspectusUrl('');
+    setBatchNumber('');
+    setSerialNumber('');
+    setRawCode('');
     setScanMessage(null);
     setEntryMode('standard');
     setCatalogSearch('');
@@ -114,6 +120,9 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       setIndication(item.indication || '');
       setImageUrl(item.imageUrl || '');
       setProspectusUrl(item.prospectusUrl || '');
+      setBatchNumber(item.batchNumber || '');
+      setSerialNumber(item.serialNumber || '');
+      setRawCode(item.rawCode || '');
       setScanMessage(null);
       setEntryMode('standard');
     }
@@ -254,8 +263,97 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     setScanMessage(null);
 
     try {
-      const result = await fetchProductByBarcode(scannedData);
+      const cleanScanned = scannedData.trim();
+      const result = await fetchProductByBarcode(cleanScanned);
 
+      // --- DUPLICATE CHECK: AYNI KAREKOD / İLAÇ STOKTA VAR MI? ---
+      const existing = products.find((p) => {
+        if (isEditing && editingProduct && p.id === editingProduct.id) {
+          return false;
+        }
+        // 1. İTS Karekod Tekil Seri Numarası eşleşmesi (Her kutunun seri no'su eşsizdir)
+        if (result.serialNumber && p.serialNumber && p.serialNumber === result.serialNumber) {
+          return true;
+        }
+        // 2. Taranan ham karekod metninin birebir aynı olması
+        if (p.rawCode && (p.rawCode === cleanScanned || (result.rawCode && p.rawCode === result.rawCode))) {
+          return true;
+        }
+        // 3. Barkod / GTIN eşleşmesi
+        const targetBarcode = result.barcode || cleanScanned;
+        if (p.barcode && targetBarcode) {
+          const matchBarcode =
+            p.barcode === targetBarcode ||
+            ('0' + p.barcode) === targetBarcode ||
+            p.barcode === ('0' + targetBarcode);
+
+          if (matchBarcode) {
+            // Eğer miad da varsa aynı miadlı kutu mu kontrol et
+            if (result.expiryDate && p.expiryDate) {
+              const resYM = result.expiryDate.substring(0, 7);
+              const pYM = p.expiryDate.substring(0, 7);
+              if (resYM === pYM) return true;
+            } else {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+
+      if (existing) {
+        Alert.alert(
+          '⚠️ Bu İlaç Zaten Stokta!',
+          `"${existing.name}" zaten ecza dolabınızda kayıtlı!\n\n` +
+          `📦 Mevcut Stok: ${existing.quantity} ${ALL_UNITS.find(u => u.id === existing.unit)?.label || existing.unit}\n` +
+          `📅 Son Kullanma: ${formatDisplayDate(existing.expiryDate)}\n` +
+          `👤 Sahibi: ${existing.owner}\n\n` +
+          `Aynı ilacı tekrar stoğa almak yerine mevcut stok miktarını 1 artırmak ister misiniz?`,
+          [
+            {
+              text: 'Miktarı 1 Artır (+1)',
+              onPress: async () => {
+                try {
+                  await updateProduct(existing.id, { quantity: existing.quantity + 1 });
+                  Alert.alert(
+                    'Stok Güncellendi ✅',
+                    `"${existing.name}" miktarı ${existing.quantity + 1} olarak güncellendi.`,
+                    [{ text: 'Tamam', onPress: () => navigation.navigate('Home') }]
+                  );
+                } catch (e) {
+                  Alert.alert('Hata', 'Stok artırılırken bir sorun oluştu.');
+                }
+              },
+            },
+            {
+              text: 'İlacı Görüntüle / Düzenle',
+              onPress: () => {
+                navigation.setParams({ productToEdit: existing });
+              },
+            },
+            {
+              text: 'Kapat',
+              style: 'cancel',
+            },
+          ]
+        );
+
+        setScanMessage({
+          type: 'info',
+          text: `⚠️ Bu ilaç zaten stokta kayıtlı: "${existing.name}" (Mevcut Miktar: ${existing.quantity})`,
+        });
+
+        // Form alanlarını bilgilendirme amaçlı göster
+        if (result.name) setName(result.name);
+        if (result.barcode) setBarcode(result.barcode);
+        if (result.expiryDate) setExpiryDate(formatDisplayDate(result.expiryDate));
+        if (result.batchNumber) setBatchNumber(result.batchNumber);
+        if (result.serialNumber) setSerialNumber(result.serialNumber);
+        setRawCode(cleanScanned);
+        return;
+      }
+
+      // Yeni ilaç ise form alanlarını doldur:
       if (result.found) {
         if (result.name) {
           setName(result.name);
@@ -283,10 +381,14 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           setExpiryDate(formatDisplayDate(result.expiryDate));
         }
 
+        if (result.batchNumber) setBatchNumber(result.batchNumber);
+        if (result.serialNumber) setSerialNumber(result.serialNumber);
+        setRawCode(cleanScanned);
+
         if (result.barcode) {
           setBarcode(result.barcode);
         } else {
-          setBarcode(scannedData);
+          setBarcode(cleanScanned);
         }
 
         let msg = 'Barkod başarıyla tanındı!';
@@ -306,7 +408,11 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
 
         setScanMessage({ type: 'success', text: msg });
       } else {
-        setBarcode(scannedData);
+        setBarcode(cleanScanned);
+        setRawCode(cleanScanned);
+        if (result.serialNumber) setSerialNumber(result.serialNumber);
+        if (result.batchNumber) setBatchNumber(result.batchNumber);
+        if (result.expiryDate) setExpiryDate(formatDisplayDate(result.expiryDate));
         setScanMessage({
           type: 'info',
           text: 'Yeni ilaç barkodu. İlaç adını ve miadını girip kaydedebilirsiniz.',
@@ -387,6 +493,54 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
 
       const finalProspectusUrl = prospectusUrl.trim() || getProspectusSearchUrl(cleanName);
 
+      // --- DUPLICATE CHECK ON SAVE (YENİ EKLEMEDE AYNI İLAÇ KONTROLÜ) ---
+      if (!isEditing) {
+        const duplicate = products.find((p) => {
+          if (serialNumber && p.serialNumber && p.serialNumber === serialNumber) return true;
+          if (rawCode && p.rawCode && p.rawCode === rawCode) return true;
+          if (barcode.trim() && p.barcode && (p.barcode === barcode.trim() || ('0' + p.barcode) === barcode.trim() || p.barcode === ('0' + barcode.trim()))) {
+            if (p.expiryDate && p.expiryDate.substring(0, 7) === isoExpiryDate) {
+              return true;
+            }
+          }
+          return false;
+        });
+
+        if (duplicate) {
+          Alert.alert(
+            '⚠️ Bu İlaç Zaten Stokta!',
+            `"${duplicate.name}" zaten ecza dolabınızda kayıtlı!\n\n` +
+            `📦 Mevcut Miktar: ${duplicate.quantity} ${ALL_UNITS.find(u => u.id === duplicate.unit)?.label || duplicate.unit}\n` +
+            `📅 Son Kullanma: ${formatDisplayDate(duplicate.expiryDate)}\n\n` +
+            `Aynı ilacı 2 kez stoğa almak yerine mevcut stok miktarını ${duplicate.quantity + cleanQty} yapmak ister misiniz?`,
+            [
+              {
+                text: `Miktarı ${duplicate.quantity + cleanQty} Yap (+${cleanQty})`,
+                onPress: async () => {
+                  setIsSaving(true);
+                  try {
+                    await updateProduct(duplicate.id, { quantity: duplicate.quantity + cleanQty });
+                    Alert.alert('Başarılı ✅', 'İlaç stok miktarı artırıldı.', [
+                      { text: 'Tamam', onPress: () => navigation.navigate('Home') },
+                    ]);
+                  } catch (e) {
+                    Alert.alert('Hata', 'Stok güncellenirken bir sorun oluştu.');
+                  } finally {
+                    setIsSaving(false);
+                  }
+                },
+              },
+              {
+                text: 'Vazgeç',
+                style: 'cancel',
+              },
+            ]
+          );
+          setIsSaving(false);
+          return;
+        }
+      }
+
       if (isEditing && editingProduct) {
         await updateProduct(editingProduct.id, {
           name: cleanName,
@@ -399,6 +553,9 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           indication: indication.trim() || undefined,
           imageUrl: imageUrl.trim() || undefined,
           prospectusUrl: finalProspectusUrl,
+          batchNumber: batchNumber.trim() || editingProduct.batchNumber,
+          serialNumber: serialNumber.trim() || editingProduct.serialNumber,
+          rawCode: rawCode.trim() || editingProduct.rawCode,
         });
 
         Alert.alert('Başarılı ✅', 'İlaç bilgileri güncellendi.', [
@@ -416,6 +573,9 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           indication: indication.trim() || undefined,
           imageUrl: imageUrl.trim() || undefined,
           prospectusUrl: finalProspectusUrl,
+          batchNumber: batchNumber.trim() || undefined,
+          serialNumber: serialNumber.trim() || undefined,
+          rawCode: rawCode.trim() || undefined,
         });
 
         if (barcode.trim()) {

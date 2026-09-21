@@ -93,7 +93,9 @@ export interface Product {
   unit: UnitType;
   owner: OwnerType;
   prospectusUrl?: string; // Prospektüs web adresi
-  batchNumber?: string; // İTS Karekod Parti/Seri no
+  batchNumber?: string; // İTS Karekod Parti no
+  serialNumber?: string; // İTS Karekod Seri no (tekil kutu no)
+  rawCode?: string; // Taranan ham karekod metni
   storageCondition?: StorageCondition;
   openedDate?: string; // Kutu/Şişe açılış tarihi (YYYY-MM-DD)
   usageInstructions?: string; // Kullanım tarifi (örn: Günde 2 kez tok)
