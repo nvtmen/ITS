@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Product, CATEGORIES, FAMILY_MEMBERS } from '../types/product';
 import { getDaysRemaining, getExpiryVisualMeta, formatDisplayDate } from '../utils/dateUtils';
@@ -32,21 +32,25 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       `"${product.name}" ecza dolabından silinsin mi?`,
       [
         { text: 'Vazgeç', style: 'cancel' },
-        { text: 'Sil', style: 'destructive', onPress: () => onDelete(product.id) },
+        {
+          text: 'Sil',
+          style: 'destructive',
+          onPress: () => onDelete(product.id),
+        },
       ]
     );
   };
 
   const handleOpenProspectus = async () => {
-    const url = product.prospectusUrl || getProspectusSearchUrl(product.name);
+    const targetUrl = product.prospectusUrl || getProspectusSearchUrl(product.name);
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
+      const canOpen = await Linking.canOpenURL(targetUrl);
+      if (canOpen) {
+        await Linking.openURL(targetUrl);
       } else {
         Alert.alert('Bilgi', 'Prospektüs bağlantısı açılamadı.');
       }
-    } catch (err) {
+    } catch (error) {
       Alert.alert('Hata', 'Prospektüs sayfasına yönlendirilirken bir hata oluştu.');
     }
   };
@@ -81,10 +85,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </View>
 
       <View style={styles.mainRow}>
-        {/* İlaç İkonu */}
-        <View style={[styles.iconWrapper, { backgroundColor: categoryMeta.bgColor }]}>
-          <Text style={styles.emojiText}>{medEmoji}</Text>
-        </View>
+        {/* İlaç İkonu veya Kutu Fotoğrafı */}
+        {product.imageUrl ? (
+          <Image source={{ uri: product.imageUrl }} style={styles.productBoxImage} />
+        ) : (
+          <View style={[styles.iconWrapper, { backgroundColor: categoryMeta.bgColor }]}>
+            <Text style={styles.emojiText}>{medEmoji}</Text>
+          </View>
+        )}
 
         {/* Detaylar */}
         <View style={styles.content}>
@@ -114,6 +122,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </View>
         </View>
       </View>
+
+      {/* Ne İçin Kullanılır? (Endikasyon Özeti) */}
+      {!!product.indication && (
+        <View style={styles.indicationBox}>
+          <Ionicons name="bulb" size={13} color="#0284C7" />
+          <Text style={styles.indicationText} numberOfLines={2}>
+            {product.indication}
+          </Text>
+        </View>
+      )}
 
       {/* Miadı Geçmişse Kırmızı Uyarı */}
       {isExpired && (
@@ -221,6 +239,33 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  productBoxImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  indicationBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    marginTop: 8,
+  },
+  indicationText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#0369A1',
+    fontWeight: '600',
+    lineHeight: 15,
   },
   emojiText: {
     fontSize: 26,

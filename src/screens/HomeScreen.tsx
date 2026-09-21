@@ -40,8 +40,9 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           const query = searchQuery.toLowerCase().trim();
           const matchName = p.name.toLowerCase().includes(query);
           const matchBarcode = p.barcode?.includes(query);
+          const matchIndication = p.indication?.toLowerCase().includes(query);
           const matchInstructions = p.usageInstructions?.toLowerCase().includes(query);
-          if (!matchName && !matchBarcode && !matchInstructions) return false;
+          if (!matchName && !matchBarcode && !matchIndication && !matchInstructions) return false;
         }
 
         // Family member (owner) match

@@ -11,9 +11,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useProducts } from '../context/ProductContext';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
 import {
@@ -21,6 +23,7 @@ import {
   saveBarcodeToLocalCatalog,
   detectCategoryFromName,
   detectUnitFromName,
+  detectIndication,
 } from '../services/barcodeService';
 import {
   CategoryType,
@@ -67,6 +70,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
   const [unit, setUnit] = useState<UnitType>('kutu');
   const [owner, setOwner] = useState<OwnerType>('GENEL');
   const [expiryDate, setExpiryDate] = useState<string>(''); // AA.YYYY formatında
+  const [indication, setIndication] = useState<string>(''); // Ne için kullanılır?
+  const [imageUrl, setImageUrl] = useState<string>(''); // Kutu resmi
   const [prospectusUrl, setProspectusUrl] = useState<string>('');
 
   // Scanner and Lookup states
@@ -85,6 +90,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     setUnit('kutu');
     setOwner('GENEL');
     setExpiryDate('');
+    setIndication('');
+    setImageUrl('');
     setProspectusUrl('');
     setScanMessage(null);
     setEntryMode('standard');
@@ -104,6 +111,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       setUnit(item.unit);
       setOwner(item.owner || 'GENEL');
       setExpiryDate(formatDisplayDate(item.expiryDate));
+      setIndication(item.indication || '');
+      setImageUrl(item.imageUrl || '');
       setProspectusUrl(item.prospectusUrl || '');
       setScanMessage(null);
       setEntryMode('standard');
@@ -118,14 +127,22 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     return unsubscribe;
   }, [navigation, resetForm]);
 
-  // Handle name change with auto-detection of category and form/unit
+  // Handle name change with auto-detection of category, form/unit, and indication
   const handleNameChange = (text: string) => {
     setName(text);
     if (!isEditing && text.trim().length >= 3) {
       const autoCat = detectCategoryFromName(text);
       const autoUnit = detectUnitFromName(text);
-      setCategory(autoCat);
-      setUnit(autoUnit);
+      const autoIndication = detectIndication(text, autoCat);
+      if (autoCat !== 'other') {
+        setCategory(autoCat);
+      }
+      if (autoUnit !== 'kutu') {
+        setUnit(autoUnit);
+      }
+      if (autoIndication) {
+        setIndication(autoIndication);
+      }
     }
   };
 
@@ -156,12 +173,78 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     setCategory(item.category);
     setUnit(item.defaultUnit);
     setQuantity(String(item.defaultQty));
+    setIndication(detectIndication(item.name, item.category));
     setProspectusUrl(item.prospectusUrl || getProspectusSearchUrl(item.name));
     setEntryMode('standard');
     setScanMessage({
       type: 'success',
       text: `"${item.name}" seçildi. Kategori ve form otomatik belirlendi.`,
     });
+  };
+
+  // Camera / Gallery Photo Picker
+  const handlePickImage = () => {
+    Alert.alert(
+      'İlaç Kutu Fotoğrafı',
+      'Kutu fotoğrafını nasıl eklemek istersiniz?',
+      [
+        {
+          text: 'Kamera ile Çek',
+          onPress: async () => {
+            try {
+              const { status } = await ImagePicker.requestCameraPermissionsAsync();
+              if (status !== 'granted') {
+                Alert.alert('İzin Gerekli', 'Kamera izni verilmedi.');
+                return;
+              }
+              const res = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.7,
+              });
+              if (!res.canceled && res.assets && res.assets[0]?.uri) {
+                setImageUrl(res.assets[0].uri);
+              }
+            } catch (err) {
+              console.warn('Camera photo error:', err);
+            }
+          },
+        },
+        {
+          text: 'Galeriden Seç',
+          onPress: async () => {
+            try {
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== 'granted') {
+                Alert.alert('İzin Gerekli', 'Galeri izni verilmedi.');
+                return;
+              }
+              const res = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.7,
+              });
+              if (!res.canceled && res.assets && res.assets[0]?.uri) {
+                setImageUrl(res.assets[0].uri);
+              }
+            } catch (err) {
+              console.warn('Gallery picker error:', err);
+            }
+          },
+        },
+        ...(imageUrl
+          ? [
+              {
+                text: 'Fotoğrafı Kaldır',
+                style: 'destructive' as const,
+                onPress: () => setImageUrl(''),
+              },
+            ]
+          : []),
+        { text: 'Vazgeç', style: 'cancel' as const },
+      ]
+    );
   };
 
   // Handle barcode or ITS datamatrix scan
@@ -177,16 +260,19 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
         if (result.name) {
           setName(result.name);
         }
-        if (result.category) {
-          setCategory(result.category);
-        } else if (result.name) {
-          setCategory(detectCategoryFromName(result.name));
+        const resolvedCat = result.category || (result.name ? detectCategoryFromName(result.name) : 'painkiller');
+        setCategory(resolvedCat);
+
+        const resolvedUnit = result.unit || (result.name ? detectUnitFromName(result.name) : 'kutu');
+        setUnit(resolvedUnit);
+
+        const resolvedIndication = result.indication || (result.name ? detectIndication(result.name, resolvedCat) : '');
+        if (resolvedIndication) {
+          setIndication(resolvedIndication);
         }
 
-        if (result.unit) {
-          setUnit(result.unit);
-        } else if (result.name) {
-          setUnit(detectUnitFromName(result.name));
+        if (result.imageUrl) {
+          setImageUrl(result.imageUrl);
         }
 
         if (result.quantity) setQuantity(String(result.quantity));
@@ -310,6 +396,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           quantity: cleanQty,
           unit,
           owner,
+          indication: indication.trim() || undefined,
+          imageUrl: imageUrl.trim() || undefined,
           prospectusUrl: finalProspectusUrl,
         });
 
@@ -325,6 +413,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           quantity: cleanQty,
           unit,
           owner,
+          indication: indication.trim() || undefined,
+          imageUrl: imageUrl.trim() || undefined,
           prospectusUrl: finalProspectusUrl,
         });
 
@@ -490,37 +580,22 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </View>
               )}
 
-              {/* Barkod & Karekod Tara Butonu */}
-              <TouchableOpacity
-                style={styles.scanButton}
-                onPress={() => setScannerVisible(true)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.scanButtonLeft}>
-                  <View style={styles.scanIconBg}>
-                    <Ionicons name="qr-code-outline" size={22} color="#FFFFFF" />
-                  </View>
-                  <View>
-                    <Text style={styles.scanButtonTitle}>Barkod / İTS Karekodu Tara</Text>
-                    <Text style={styles.scanButtonSubtitle}>
-                      Kamera ile okutun; ilaç adı, kategori ve form otomatik dolsun
-                    </Text>
-                  </View>
-                </View>
-                {isSearchingBarcode ? (
-                  <ActivityIndicator color="#0284C7" size="small" />
-                ) : (
-                  <Ionicons name="camera" size={20} color="#0284C7" />
-                )}
-              </TouchableOpacity>
+              {/* BARKOD TARA + BARKOD NO (AYNI SATIRDA) */}
+              <View style={styles.barcodeCombinedRow}>
+                <TouchableOpacity
+                  style={styles.compactScanBtn}
+                  onPress={() => setScannerVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="qr-code-outline" size={17} color="#FFFFFF" />
+                  <Text style={styles.compactScanBtnText}>Karekod / Barkod Tara</Text>
+                  {isSearchingBarcode && <ActivityIndicator color="#FFFFFF" size="small" />}
+                </TouchableOpacity>
 
-              {/* Barkod / GTIN Numarası Girişi */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Barkod / GTIN Numarası</Text>
-                <View style={styles.barcodeInputRow}>
+                <View style={styles.compactBarcodeInputBox}>
                   <TextInput
-                    style={styles.barcodeTextInput}
-                    placeholder="869... Barkod numarası yazın"
+                    style={styles.compactBarcodeTextInput}
+                    placeholder="869... Barkod No"
                     placeholderTextColor="#94A3B8"
                     keyboardType="numeric"
                     value={barcode}
@@ -528,28 +603,24 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   />
                   {barcode.trim().length > 0 && (
                     <TouchableOpacity
-                      style={styles.barcodeSearchInlineBtn}
+                      style={styles.compactBarcodeSearchBtn}
                       onPress={() => handleBarcodeScanned(barcode.trim())}
                       disabled={isSearchingBarcode}
-                      activeOpacity={0.8}
                     >
-                      {isSearchingBarcode ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
-                      ) : (
-                        <>
-                          <Ionicons name="search" size={14} color="#FFFFFF" />
-                          <Text style={styles.barcodeSearchInlineText}>Bul</Text>
-                        </>
-                      )}
+                      <Ionicons name="search" size={14} color="#0284C7" />
                     </TouchableOpacity>
                   )}
                 </View>
               </View>
 
               {/* 1. İLAÇ SAHİBİ SEÇİMİ (ESRA - NEVZAT - DERİN - DORUK - NENE - GENEL) */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>İlaç Ev Halkından Kime Ait? *</Text>
-                <View style={styles.ownerGrid}>
+              <View style={styles.compactSection}>
+                <Text style={styles.compactLabel}>İlaç Ev Halkından Kime Ait? *</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.compactMemberRow}
+                >
                   {(['ESRA', 'NEVZAT', 'DERİN', 'DORUK', 'NENE', 'GENEL'] as OwnerType[]).map(
                     (memberKey) => {
                       const isSelected = owner === memberKey;
@@ -558,7 +629,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                         <TouchableOpacity
                           key={memberKey}
                           style={[
-                            styles.ownerOptionBtn,
+                            styles.compactMemberChip,
                             isSelected
                               ? { backgroundColor: meta.color, borderColor: meta.color }
                               : { backgroundColor: meta.bgColor, borderColor: meta.borderColor },
@@ -568,12 +639,12 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                         >
                           <Ionicons
                             name={meta.avatarIcon as any}
-                            size={16}
+                            size={13}
                             color={isSelected ? '#FFFFFF' : meta.color}
                           />
                           <Text
                             style={[
-                              styles.ownerOptionText,
+                              styles.compactMemberText,
                               { color: isSelected ? '#FFFFFF' : meta.color },
                             ]}
                           >
@@ -583,26 +654,60 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                       );
                     }
                   )}
+                </ScrollView>
+              </View>
+
+              {/* 2. İLAÇ ADI VE KUTU FOTOĞRAFI (AYNI SATIRDA) */}
+              <View style={styles.compactSection}>
+                <View style={styles.nameAndPhotoRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.compactLabel}>İlaç Adı ve Dozu *</Text>
+                    <TextInput
+                      style={styles.compactInput}
+                      placeholder="Örn: Benzoxin %5 + %1 Topikal Jel"
+                      placeholderTextColor="#94A3B8"
+                      value={name}
+                      onChangeText={handleNameChange}
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.photoBoxBtn}
+                    onPress={handlePickImage}
+                    activeOpacity={0.8}
+                  >
+                    {imageUrl ? (
+                      <Image source={{ uri: imageUrl }} style={styles.photoBoxImg} />
+                    ) : (
+                      <View style={styles.photoBoxEmpty}>
+                        <Ionicons name="camera-outline" size={17} color="#0284C7" />
+                        <Text style={styles.photoBoxEmptyText}>Kutu Resmi</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
 
-              {/* 2. İLAÇ ADI (GİRİLDİĞİNDE KATEGORİ VE FORM OTOMATİK BELİRLENİR) */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>İlaç Adı ve Dozu *</Text>
+              {/* 3. NE İÇİN KULLANILIR? (KULLANIM AMACI / ENDİKASYON ÖZETİ) */}
+              <View style={styles.compactSection}>
+                <View style={styles.labelWithHintRow}>
+                  <Text style={styles.compactLabel}>Ne İçin Kullanılır? (Kullanım Amacı)</Text>
+                  <Text style={styles.autoDetectHint}>✓ Otomatik doldurulur</Text>
+                </View>
                 <TextInput
-                  style={styles.textInput}
-                  placeholder="Örn: Parol 500 mg Tablet"
+                  style={styles.compactInput}
+                  placeholder="Örn: Akne ve sivilce tedavisinde kullanılır"
                   placeholderTextColor="#94A3B8"
-                  value={name}
-                  onChangeText={handleNameChange}
+                  value={indication}
+                  onChangeText={setIndication}
                 />
               </View>
 
-              {/* 3. İLAÇ KATEGORİSİ (BARKODDAN OTOMATİK SEÇİLİR, DOKUNARAK DEĞİŞTİRİLEBİLİR) */}
-              <View style={styles.inputGroup}>
+              {/* 4. İLAÇ KATEGORİSİ (BARKODDAN OTOMATİK SEÇİLİR, DOKUNARAK DEĞİŞTİRİLEBİLİR) */}
+              <View style={styles.compactSection}>
                 <View style={styles.labelWithHintRow}>
-                  <Text style={styles.inputLabel}>İlaç Kategorisi *</Text>
-                  <Text style={styles.autoDetectHint}>✓ Barkoddan otomatik seçilir</Text>
+                  <Text style={styles.compactLabel}>İlaç Kategorisi *</Text>
+                  <Text style={styles.autoDetectHint}>✓ Otomatik seçilir</Text>
                 </View>
                 <ScrollView
                   horizontal
@@ -626,7 +731,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                       >
                         <Ionicons
                           name={cat.icon as any}
-                          size={14}
+                          size={12}
                           color={isSelected ? '#FFFFFF' : cat.color}
                         />
                         <Text
@@ -643,11 +748,11 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </ScrollView>
               </View>
 
-              {/* 4. FORM / BİRİM (BARKODDAN OTOMATİK SEÇİLİR, DOKUNARAK DEĞİŞTİRİLEBİLİR) */}
-              <View style={styles.inputGroup}>
+              {/* 5. FORM / BİRİM (BARKODDAN OTOMATİK SEÇİLİR, DOKUNARAK DEĞİŞTİRİLEBİLİR) */}
+              <View style={styles.compactSection}>
                 <View style={styles.labelWithHintRow}>
-                  <Text style={styles.inputLabel}>Form / Birim *</Text>
-                  <Text style={styles.autoDetectHint}>✓ Barkoddan otomatik seçilir</Text>
+                  <Text style={styles.compactLabel}>Form / Birim *</Text>
+                  <Text style={styles.autoDetectHint}>✓ Otomatik seçilir</Text>
                 </View>
                 <ScrollView
                   horizontal
@@ -674,11 +779,11 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </ScrollView>
               </View>
 
-              {/* 4. MİAD (AA.YYYY FORMATINDA) VE MİKTAR */}
+              {/* 6. MİAD (AA.YYYY FORMATINDA) VE MİKTAR */}
               <View style={styles.rowTwoCols}>
-                <View style={[styles.inputGroup, { flex: 1.4 }]}>
+                <View style={[styles.compactSection, { flex: 1.4 }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={styles.inputLabel}>Miad (AA.YYYY) *</Text>
+                    <Text style={styles.compactLabel}>Miad (AA.YYYY) *</Text>
                     {visualMeta && (
                       <View style={[styles.visualBadge, { backgroundColor: visualMeta.badgeBg }]}>
                         <Text style={[styles.visualBadgeText, { color: visualMeta.badgeText }]}>
@@ -689,7 +794,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   </View>
                   <TextInput
                     style={[
-                      styles.textInput,
+                      styles.compactInput,
                       expiryDate && !isDateValid && styles.inputError,
                       isDateValid && styles.inputSuccess,
                     ]}
@@ -702,10 +807,10 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 0.8 }]}>
-                  <Text style={styles.inputLabel}>Miktar</Text>
+                <View style={[styles.compactSection, { flex: 0.8 }]}>
+                  <Text style={styles.compactLabel}>Miktar</Text>
                   <TextInput
-                    style={styles.textInput}
+                    style={styles.compactInput}
                     placeholder="1"
                     placeholderTextColor="#94A3B8"
                     keyboardType="numeric"
@@ -715,17 +820,17 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </View>
               </View>
 
-              {/* 5. PROSPEKTÜS BAĞLANTISI */}
-              <View style={styles.inputGroup}>
+              {/* 7. PROSPEKTÜS BAĞLANTISI */}
+              <View style={styles.compactSection}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={styles.inputLabel}>Prospektüs Bağlantısı</Text>
+                  <Text style={styles.compactLabel}>Prospektüs Bağlantısı</Text>
                   <TouchableOpacity onPress={handleTestProspectus} style={styles.testProspectusBtn}>
-                    <Ionicons name="open-outline" size={13} color="#0284C7" />
+                    <Ionicons name="open-outline" size={12} color="#0284C7" />
                     <Text style={styles.testProspectusText}>Prospektüsü Aç</Text>
                   </TouchableOpacity>
                 </View>
                 <TextInput
-                  style={styles.textInput}
+                  style={styles.compactInput}
                   placeholder="İlaç adına göre otomatik oluşturulur"
                   placeholderTextColor="#94A3B8"
                   value={prospectusUrl}
@@ -744,7 +849,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
-                    <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
+                    <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
                     <Text style={styles.saveButtonText}>
                       {isEditing ? 'İlaç Bilgilerini Güncelle' : 'İlacı Dolaba Kaydet'}
                     </Text>
@@ -840,8 +945,119 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingHorizontal: 12,
+    paddingBottom: 24,
+  },
+  barcodeCombinedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 7,
+  },
+  compactScanBtn: {
+    flex: 1.15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#0284C7',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 9,
+  },
+  compactScanBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  compactBarcodeInputBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    height: 40,
+  },
+  compactBarcodeTextInput: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0F172A',
+    paddingVertical: 2,
+  },
+  compactBarcodeSearchBtn: {
+    padding: 4,
+  },
+  compactSection: {
+    marginBottom: 7,
+  },
+  compactLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 3,
+  },
+  compactInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    fontSize: 12.5,
+    color: '#0F172A',
+    height: 38,
+  },
+  compactMemberRow: {
+    flexDirection: 'row',
+    gap: 5,
+    paddingVertical: 2,
+  },
+  compactMemberChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 7,
+    borderWidth: 1,
+  },
+  compactMemberText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  nameAndPhotoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  photoBoxBtn: {
+    width: 54,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1.2,
+    borderColor: '#BAE6FD',
+    backgroundColor: '#F0F9FF',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoBoxImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  photoBoxEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoBoxEmptyText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#0284C7',
+    marginTop: 1,
   },
   scanButton: {
     flexDirection: 'row',
@@ -882,9 +1098,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 12,
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
     borderWidth: 1,
   },
   messageSuccess: {
@@ -896,7 +1112,7 @@ const styles = StyleSheet.create({
     borderColor: '#BFDBFE',
   },
   messageText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     flex: 1,
   },
@@ -907,22 +1123,22 @@ const styles = StyleSheet.create({
     color: '#1E40AF',
   },
   inputGroup: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   inputLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   textInput: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    fontSize: 13.5,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 13,
     color: '#0F172A',
   },
   inputError: {
@@ -930,54 +1146,6 @@ const styles = StyleSheet.create({
   },
   inputSuccess: {
     borderColor: '#10B981',
-  },
-  ownerGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  ownerOptionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  ownerOptionText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  barcodeInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  barcodeTextInput: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    fontSize: 13.5,
-    color: '#0F172A',
-  },
-  barcodeSearchInlineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  barcodeSearchInlineText: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '800',
   },
   labelWithHintRow: {
     flexDirection: 'row',

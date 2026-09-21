@@ -97,6 +97,7 @@ export interface Product {
   storageCondition?: StorageCondition;
   openedDate?: string; // Kutu/Şişe açılış tarihi (YYYY-MM-DD)
   usageInstructions?: string; // Kullanım tarifi (örn: Günde 2 kez tok)
+  indication?: string; // Ne için kullanılır? (Kullanım amacı / endikasyon)
   imageUrl?: string;
   purchaseDate?: string; // YYYY-MM-DD or GG.AA.YYYY
   storageTip?: string;
