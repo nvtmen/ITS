@@ -39,6 +39,253 @@ interface TitckItem {
 const TITCK_DB: Record<string, TitckItem> = titckCatalog as Record<string, TitckItem>;
 
 /**
+ * İlaç adından kategoriyi akıllıca tespit eder
+ */
+export function detectCategoryFromName(name: string): CategoryType {
+  const upper = (name || '').toLocaleUpperCase('tr-TR');
+  
+  // 1. Ağrı Kesici & Ateş Düşürücü
+  if (
+    upper.includes('PAROL') ||
+    upper.includes('ARVELES') ||
+    upper.includes('MINOSET') ||
+    upper.includes('VERMIDON') ||
+    upper.includes('MAJEZIK') ||
+    upper.includes('DOLOREX') ||
+    upper.includes('APRANAX') ||
+    upper.includes('BRUFEN') ||
+    upper.includes('ADVIL') ||
+    upper.includes('DEXPOFEN') ||
+    upper.includes('DEKSKETOPROFEN') ||
+    upper.includes('PARASETAMOL') ||
+    upper.includes('PARACETAMOL') ||
+    upper.includes('NAPROXEN') ||
+    upper.includes('NAPROKSEN') ||
+    upper.includes('DIKLOFENAK') ||
+    upper.includes('VOLTAREN') ||
+    upper.includes('DIKLOMEC') ||
+    upper.includes('NOVALGIN') ||
+    upper.includes('METAMIZOL') ||
+    upper.includes('CATAFLAM') ||
+    upper.includes('GERALGINE') ||
+    upper.includes('MELOKSIKAM') ||
+    upper.includes('ETOL') ||
+    upper.includes('AGRI') ||
+    upper.includes('ATES')
+  ) {
+    return 'painkiller';
+  }
+
+  // 2. Grip & Soğuk Algınlığı (Öncelikli kontrol)
+  if (
+    upper.includes('GRIP') ||
+    upper.includes('SOGUK') ||
+    upper.includes('OKSURUK') ||
+    upper.includes('BURUN') ||
+    upper.includes('TYLOL') ||
+    upper.includes('KATARIN') ||
+    upper.includes('A-FERIN') ||
+    upper.includes('AFERIN') ||
+    upper.includes('NUROFEN COLD') ||
+    upper.includes('IBUCOLD') ||
+    upper.includes('OTRIVINE') ||
+    upper.includes('ILIADIN') ||
+    upper.includes('BENICAL') ||
+    upper.includes('THERAFLU') ||
+    upper.includes('KONGEST') ||
+    upper.includes('ASIST') ||
+    upper.includes('MUCONEX') ||
+    upper.includes('MENTOPIN')
+  ) {
+    return 'cold_flu';
+  }
+
+  // 3. Antibiyotik
+  if (
+    upper.includes('AUGMENTIN') ||
+    upper.includes('KLAVUNAT') ||
+    upper.includes('AMOKLAVIN') ||
+    upper.includes('AMOKSISILIN') ||
+    upper.includes('ANTIBIYOTIK') ||
+    upper.includes('SIPRO') ||
+    upper.includes('CIPRO') ||
+    upper.includes('SEF') ||
+    upper.includes('CEF') ||
+    upper.includes('AZITRO') ||
+    upper.includes('ZITROMAX') ||
+    upper.includes('MACROL') ||
+    upper.includes('KLACID') ||
+    upper.includes('TETRADOX') ||
+    upper.includes('PENISILIN') ||
+    upper.includes('PENBISIN') ||
+    upper.includes('RIFCAP') ||
+    upper.includes('SULCID') ||
+    upper.includes('ROXIN') ||
+    upper.includes('CEFTRIAKSON') ||
+    upper.includes('BACTRIM') ||
+    upper.includes('ZINNAT') ||
+    upper.includes('ENFEXIA') ||
+    upper.includes('ALFOXIL') ||
+    upper.includes('LARGOPEN')
+  ) {
+    return 'antibiotic';
+  }
+
+  // 4. Tansiyon & Kalp & Şeker / Kronik
+  if (
+    upper.includes('CORASPIN') ||
+    upper.includes('TANSIYON') ||
+    upper.includes('INSULIN') ||
+    upper.includes('BELOC') ||
+    upper.includes('LIPITOR') ||
+    upper.includes('KALP') ||
+    upper.includes('NORVASC') ||
+    upper.includes('DELIX') ||
+    upper.includes('COAPROVEL') ||
+    upper.includes('AMLODIPIN') ||
+    upper.includes('ATORVASTATIN') ||
+    upper.includes('CRESTOR') ||
+    upper.includes('GLIFOR') ||
+    upper.includes('JANUVIA') ||
+    upper.includes('DIAMICRON') ||
+    upper.includes('MATOFIN') ||
+    upper.includes('EUTHYROX') ||
+    upper.includes('LEVOTIRON') ||
+    upper.includes('VASOXEN') ||
+    upper.includes('TENSINOR') ||
+    upper.includes('TENORETIC') ||
+    upper.includes('MICARDIS') ||
+    upper.includes('CORDALIN') ||
+    upper.includes('METFORMIN')
+  ) {
+    return 'chronic';
+  }
+
+  // 5. Mide & Sindirim
+  if (
+    upper.includes('MIDE') ||
+    upper.includes('NEXIUM') ||
+    upper.includes('LANSOR') ||
+    upper.includes('TALCID') ||
+    upper.includes('GAVISCON') ||
+    upper.includes('RENNIE') ||
+    upper.includes('PULCET') ||
+    upper.includes('PANTPAS') ||
+    upper.includes('FAMODIN') ||
+    upper.includes('METPAMID') ||
+    upper.includes('BUSCOPAN') ||
+    upper.includes('MOTILIUM') ||
+    upper.includes('DEBRIDAT') ||
+    upper.includes('EMEDUR') ||
+    upper.includes('METEOSPASMYL')
+  ) {
+    return 'digestive';
+  }
+
+  // 6. Vitamin & Mineral & Takviye
+  if (
+    upper.includes('VITAMIN') ||
+    upper.includes('DEVIT') ||
+    upper.includes('BENEXOL') ||
+    upper.includes('FERRUM') ||
+    upper.includes('FERSINOL') ||
+    upper.includes('MALTOFER') ||
+    upper.includes('GYNO') ||
+    upper.includes('CINKO') ||
+    upper.includes('ZINC') ||
+    upper.includes('B12') ||
+    upper.includes('MAGNEZYUM') ||
+    upper.includes('MAGNORM') ||
+    upper.includes('CALCIMAX') ||
+    upper.includes('SUPRADYN') ||
+    upper.includes('PHARMATON') ||
+    upper.includes('FOLIK')
+  ) {
+    return 'vitamin';
+  }
+
+  // 7. Krem & Merhem & Jel
+  if (
+    upper.includes('KREM') ||
+    upper.includes('MERHEM') ||
+    upper.includes('JEL') ||
+    upper.includes('POMAD') ||
+    upper.includes('BEPANTHOL') ||
+    upper.includes('FUCIDIN') ||
+    upper.includes('FUCICORT') ||
+    upper.includes('DERMOVATE') ||
+    upper.includes('MADECASSOL') ||
+    upper.includes('SILVERDIN') ||
+    upper.includes('TERRAMYCIN') ||
+    upper.includes('TRAVAZOL') ||
+    upper.includes('TRAVOCORT') ||
+    upper.includes('FENISTIL')
+  ) {
+    return 'ointment';
+  }
+
+  // 8. Göz & Kulak Damlası / Sprey
+  if (
+    upper.includes('DAMLA') ||
+    upper.includes('GOZ') ||
+    upper.includes('KULAK') ||
+    upper.includes('SPREY') ||
+    upper.includes('OFTALMIK') ||
+    upper.includes('TOBRASED') ||
+    upper.includes('TOBRADEX') ||
+    upper.includes('REFRESH') ||
+    upper.includes('SYSTANE') ||
+    upper.includes('PATANOL') ||
+    upper.includes('SIPROGUT') ||
+    upper.includes('GENTAGUT')
+  ) {
+    return 'drops';
+  }
+
+  return 'other';
+}
+
+/**
+ * İlaç adından form birimini akıllıca tespit eder
+ */
+export function detectUnitFromName(name: string): UnitType {
+  const upper = (name || '').toLocaleUpperCase('tr-TR');
+  if (upper.includes('TABLET') || upper.includes('TAB') || upper.includes('DRAJE')) return 'tablet';
+  if (upper.includes('KAPSUL') || upper.includes('KAP')) return 'kapsul';
+  if (
+    upper.includes('SURUP') ||
+    upper.includes('SUSPANSIYON') ||
+    upper.includes('ORAL COZELTI') ||
+    upper.includes('LIQUID') ||
+    upper.includes('LIKIT') ||
+    upper.includes('SISE') ||
+    upper.includes('SOLUSYON')
+  ) {
+    return 'surup';
+  }
+  if (
+    upper.includes('KREM') ||
+    upper.includes('MERHEM') ||
+    upper.includes('JEL') ||
+    upper.includes('POMAD') ||
+    upper.includes('TUP')
+  ) {
+    return 'tup';
+  }
+  if (upper.includes('DAMLA') || upper.includes('SPREY')) return 'damla';
+  if (
+    upper.includes('FLAKON') ||
+    upper.includes('AMPUL') ||
+    upper.includes('ENJEKSIYON') ||
+    upper.includes('ENJEKTOR') ||
+    upper.includes('INFUZYON')
+  ) {
+    return 'flakon';
+  }
+  return 'kutu';
+}
+
+/**
  * Türkiye İlaç Takip Sistemi (İTS) GS1 DataMatrix Karekod Ayrıştırıcı
  *
  * Standart İTS Formatı:
@@ -275,11 +522,23 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
 
     const matched = TITCK_DB[pureKey] || TITCK_DB[cleanKey13] || TITCK_DB[cleanKey14];
     if (matched) {
+      let resolvedCategory: CategoryType = matched.category || 'other';
+      if (resolvedCategory === 'other') {
+        const fallback = detectCategoryFromName(matched.name);
+        if (fallback !== 'other') resolvedCategory = fallback;
+      }
+
+      let resolvedUnit: UnitType = matched.unit || 'kutu';
+      if (resolvedUnit === 'kutu') {
+        const fallbackUnit = detectUnitFromName(matched.name);
+        if (fallbackUnit !== 'kutu') resolvedUnit = fallbackUnit;
+      }
+
       return {
         found: true,
         name: matched.name,
-        category: matched.category || 'other',
-        unit: matched.unit || 'kutu',
+        category: resolvedCategory,
+        unit: resolvedUnit,
         quantity: 1,
         company: matched.company,
         prospectusUrl: getProspectusSearchUrl(matched.name),

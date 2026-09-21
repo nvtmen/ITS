@@ -16,7 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useProducts } from '../context/ProductContext';
 import { BarcodeScannerModal } from '../components/BarcodeScannerModal';
-import { fetchProductByBarcode, saveBarcodeToLocalCatalog } from '../services/barcodeService';
+import {
+  fetchProductByBarcode,
+  saveBarcodeToLocalCatalog,
+  detectCategoryFromName,
+  detectUnitFromName,
+} from '../services/barcodeService';
 import {
   CategoryType,
   UnitType,
@@ -39,114 +44,8 @@ import {
   getProspectusSearchUrl,
 } from '../data/medicationData';
 
-function detectCategoryFromName(name: string): CategoryType {
-  const upper = (name || '').toLocaleUpperCase('tr-TR');
-  if (
-    upper.includes('PAROL') ||
-    upper.includes('ARVELES') ||
-    upper.includes('MAJEZIK') ||
-    upper.includes('DOLOREX') ||
-    upper.includes('APRANAX') ||
-    upper.includes('AGRI') ||
-    upper.includes('ATES')
-  ) {
-    return 'painkiller';
-  }
-  if (
-    upper.includes('AUGMENTIN') ||
-    upper.includes('KLAVUNAT') ||
-    upper.includes('AMOKLAVIN') ||
-    upper.includes('ANTIBIYOTIK') ||
-    upper.includes('SIPRO')
-  ) {
-    return 'antibiotic';
-  }
-  if (
-    upper.includes('CORASPIN') ||
-    upper.includes('TANSIYON') ||
-    upper.includes('INSULIN') ||
-    upper.includes('BELOC') ||
-    upper.includes('LIPITOR') ||
-    upper.includes('KALP')
-  ) {
-    return 'chronic';
-  }
-  if (
-    upper.includes('GRIP') ||
-    upper.includes('SOGUK') ||
-    upper.includes('OKSURUK') ||
-    upper.includes('TYLOL') ||
-    upper.includes('KATARIN') ||
-    upper.includes('NUROFEN') ||
-    upper.includes('OTRIVINE')
-  ) {
-    return 'cold_flu';
-  }
-  if (
-    upper.includes('MIDE') ||
-    upper.includes('NEXIUM') ||
-    upper.includes('LANSOR') ||
-    upper.includes('TALCID') ||
-    upper.includes('GAVISCON') ||
-    upper.includes('RENNIE')
-  ) {
-    return 'digestive';
-  }
-  if (
-    upper.includes('VITAMIN') ||
-    upper.includes('DEVIT') ||
-    upper.includes('BENEXOL') ||
-    upper.includes('FERRUM') ||
-    upper.includes('CINKO') ||
-    upper.includes('B12')
-  ) {
-    return 'vitamin';
-  }
-  if (
-    upper.includes('KREM') ||
-    upper.includes('MERHEM') ||
-    upper.includes('JEL') ||
-    upper.includes('POMAD') ||
-    upper.includes('BEPANTHOL') ||
-    upper.includes('FUCIDIN')
-  ) {
-    return 'ointment';
-  }
-  if (
-    upper.includes('DAMLA') ||
-    upper.includes('GOZ') ||
-    upper.includes('KULAK') ||
-    upper.includes('SPREY')
-  ) {
-    return 'drops';
-  }
-  return 'other';
-}
-
-function detectUnitFromName(name: string): UnitType {
-  const upper = (name || '').toLocaleUpperCase('tr-TR');
-  if (upper.includes('TABLET') || upper.includes('TAB')) return 'tablet';
-  if (upper.includes('KAPSUL') || upper.includes('KAP')) return 'kapsul';
-  if (
-    upper.includes('SURUP') ||
-    upper.includes('SUSPANSIYON') ||
-    upper.includes('ORAL COZELTI') ||
-    upper.includes('LIQUID')
-  ) {
-    return 'surup';
-  }
-  if (
-    upper.includes('KREM') ||
-    upper.includes('MERHEM') ||
-    upper.includes('JEL') ||
-    upper.includes('POMAD')
-  ) {
-    return 'tup';
-  }
-  if (upper.includes('DAMLA') || upper.includes('SPREY')) return 'damla';
-  if (upper.includes('FLAKON') || upper.includes('AMPUL')) return 'flakon';
-  return 'kutu';
-}
+const ALL_CATEGORIES = Object.values(CATEGORIES);
+const ALL_UNITS = UNITS;
 
 export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
   navigation,
@@ -277,9 +176,19 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       if (result.found) {
         if (result.name) {
           setName(result.name);
-          setCategory(result.category || detectCategoryFromName(result.name));
-          setUnit(result.unit || detectUnitFromName(result.name));
         }
+        if (result.category) {
+          setCategory(result.category);
+        } else if (result.name) {
+          setCategory(detectCategoryFromName(result.name));
+        }
+
+        if (result.unit) {
+          setUnit(result.unit);
+        } else if (result.name) {
+          setUnit(detectUnitFromName(result.name));
+        }
+
         if (result.quantity) setQuantity(String(result.quantity));
         if (result.prospectusUrl) setProspectusUrl(result.prospectusUrl);
 
@@ -292,11 +201,11 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
 
         let msg = 'Barkod başarıyla tanındı!';
         if (result.source === 'titck_official_db') {
-          msg = 'T.C. Sağlık Bakanlığı (TİTCK) veritabanında bulundu! İlaç adı, kategori ve form otomatik dolduruldu.';
+          msg = 'T.C. Sağlık Bakanlığı (TİTCK) veritabanında bulundu! İlaç adı, kategori ve form otomatik seçildi.';
         } else if (result.source === 'its_datamatrix') {
           msg = 'İTS Karekodu başarıyla okundu! Miad ve ilaç bilgileri otomatik dolduruldu.';
         } else if (result.source === 'popular_med_db') {
-          msg = 'İlaç veri tabanında bulundu! Kategori ve form otomatik belirlendi.';
+          msg = 'İlaç veri tabanında bulundu! Kategori ve form otomatik seçildi.';
         } else if (result.source === 'local_med_catalog') {
           msg = 'Daha önce kaydettiğiniz ilaç hafızasından tanındı!';
         }
@@ -314,6 +223,15 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       setBarcode(scannedData);
     } finally {
       setIsSearchingBarcode(false);
+    }
+  };
+
+  // Handle manual typing of barcode
+  const handleBarcodeInputChange = (text: string) => {
+    setBarcode(text);
+    const clean = text.trim();
+    if (clean.length === 13 || clean.length === 14) {
+      handleBarcodeScanned(clean);
     }
   };
 
@@ -577,7 +495,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   <View>
                     <Text style={styles.scanButtonTitle}>Barkod / İTS Karekodu Tara</Text>
                     <Text style={styles.scanButtonSubtitle}>
-                      Kamera ile okutun, ilaç adı, kategori ve miad otomatik dolsun
+                      Kamera ile okutun; ilaç adı, kategori ve form otomatik dolsun
                     </Text>
                   </View>
                 </View>
@@ -587,6 +505,38 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   <Ionicons name="camera" size={20} color="#0284C7" />
                 )}
               </TouchableOpacity>
+
+              {/* Barkod / GTIN Numarası Girişi */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Barkod / GTIN Numarası</Text>
+                <View style={styles.barcodeInputRow}>
+                  <TextInput
+                    style={styles.barcodeTextInput}
+                    placeholder="869... Barkod numarası yazın"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numeric"
+                    value={barcode}
+                    onChangeText={handleBarcodeInputChange}
+                  />
+                  {barcode.trim().length > 0 && (
+                    <TouchableOpacity
+                      style={styles.barcodeSearchInlineBtn}
+                      onPress={() => handleBarcodeScanned(barcode.trim())}
+                      disabled={isSearchingBarcode}
+                      activeOpacity={0.8}
+                    >
+                      {isSearchingBarcode ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <>
+                          <Ionicons name="search" size={14} color="#FFFFFF" />
+                          <Text style={styles.barcodeSearchInlineText}>Bul</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
 
               {/* 1. İLAÇ SAHİBİ SEÇİMİ (ESRA - NEVZAT - DERİN - DORUK - NENE - GENEL) */}
               <View style={styles.inputGroup}>
@@ -640,24 +590,80 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 />
               </View>
 
-              {/* 3. OTOMATİK BELİRLENEN KATEGORİ VE FORM BİRİMİ */}
-              <View style={styles.autoFilledInfoCard}>
-                <View style={styles.autoFilledRow}>
-                  <Text style={styles.autoFilledLabel}>İlaç Kategorisi:</Text>
-                  <View style={[styles.autoPill, { backgroundColor: categoryMeta.bgColor }]}>
-                    <Ionicons name={categoryMeta.icon as any} size={12} color={categoryMeta.color} />
-                    <Text style={[styles.autoPillText, { color: categoryMeta.color }]}>
-                      {categoryMeta.label}
-                    </Text>
-                  </View>
+              {/* 3. İLAÇ KATEGORİSİ (BARKODDAN OTOMATİK SEÇİLİR, DOKUNARAK DEĞİŞTİRİLEBİLİR) */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelWithHintRow}>
+                  <Text style={styles.inputLabel}>İlaç Kategorisi *</Text>
+                  <Text style={styles.autoDetectHint}>✓ Barkoddan otomatik seçilir</Text>
                 </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalScrollList}
+                >
+                  {ALL_CATEGORIES.map((cat) => {
+                    const isSelected = category === cat.id;
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[
+                          styles.catOptionChip,
+                          isSelected && {
+                            backgroundColor: cat.color,
+                            borderColor: cat.color,
+                          },
+                        ]}
+                        onPress={() => setCategory(cat.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name={cat.icon as any}
+                          size={14}
+                          color={isSelected ? '#FFFFFF' : cat.color}
+                        />
+                        <Text
+                          style={[
+                            styles.catOptionText,
+                            isSelected && { color: '#FFFFFF', fontWeight: '800' },
+                          ]}
+                        >
+                          {cat.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
 
-                <View style={styles.autoFilledRow}>
-                  <Text style={styles.autoFilledLabel}>Form / Birim:</Text>
-                  <View style={styles.autoPillUnit}>
-                    <Text style={styles.autoPillUnitText}>{unit.toUpperCase()}</Text>
-                  </View>
+              {/* 4. FORM / BİRİM (BARKODDAN OTOMATİK SEÇİLİR, DOKUNARAK DEĞİŞTİRİLEBİLİR) */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelWithHintRow}>
+                  <Text style={styles.inputLabel}>Form / Birim *</Text>
+                  <Text style={styles.autoDetectHint}>✓ Barkoddan otomatik seçilir</Text>
                 </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.horizontalScrollList}
+                >
+                  {ALL_UNITS.map((u) => {
+                    const isSelected = unit === u.id;
+                    return (
+                      <TouchableOpacity
+                        key={u.id}
+                        style={[styles.unitChip, isSelected && styles.unitChipSelected]}
+                        onPress={() => setUnit(u.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[styles.unitChipText, isSelected && styles.unitChipTextSelected]}
+                        >
+                          {u.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
               {/* 4. MİAD (AA.YYYY FORMATINDA) VE MİKTAR */}
@@ -935,47 +941,87 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  autoFilledInfoCard: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 6,
-  },
-  autoFilledRow: {
+  barcodeInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 8,
   },
-  autoFilledLabel: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
+  barcodeTextInput: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13.5,
+    color: '#0F172A',
   },
-  autoPill: {
+  barcodeSearchInlineBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
-  autoPillText: {
+  barcodeSearchInlineText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  labelWithHintRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  autoDetectHint: {
     fontSize: 11,
+    color: '#0284C7',
     fontWeight: '700',
   },
-  autoPillUnit: {
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
+  horizontalScrollList: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 3,
   },
-  autoPillUnitText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#334155',
+  catOptionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  catOptionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  unitChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  unitChipSelected: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  unitChipText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  unitChipTextSelected: {
+    color: '#FFFFFF',
   },
   visualBadge: {
     paddingHorizontal: 6,
