@@ -31,17 +31,28 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const [selectedOwner, setSelectedOwner] = useState<OwnerType | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>('all');
 
-  // Filter and sort products by closest expiry date first (expired/urgent at the top)
+  // Helper for Turkish character normalization in search
+  const normalizeTr = (str: string) =>
+    str
+      .toLowerCase()
+      .replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u')
+      .replace(/ş/g, 's')
+      .replace(/ı/g, 'i')
+      .replace(/ö/g, 'o')
+      .replace(/ç/g, 'c');
+
+  // Filter and sort products alphabetically (A-Z) by default as requested
   const filteredProducts = useMemo(() => {
     return products
       .filter((p) => {
-        // Search query match
+        // Search query match across name, barcode, and "ne için kullanılır" (indication)
         if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase().trim();
-          const matchName = p.name.toLowerCase().includes(query);
-          const matchBarcode = p.barcode?.includes(query);
-          const matchIndication = p.indication?.toLowerCase().includes(query);
-          const matchInstructions = p.usageInstructions?.toLowerCase().includes(query);
+          const query = normalizeTr(searchQuery.trim());
+          const matchName = normalizeTr(p.name).includes(query);
+          const matchBarcode = p.barcode ? p.barcode.includes(searchQuery.trim()) : false;
+          const matchIndication = p.indication ? normalizeTr(p.indication).includes(query) : false;
+          const matchInstructions = p.usageInstructions ? normalizeTr(p.usageInstructions).includes(query) : false;
           if (!matchName && !matchBarcode && !matchIndication && !matchInstructions) return false;
         }
 
@@ -66,9 +77,8 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         return true;
       })
       .sort((a, b) => {
-        const remainingA = getDaysRemaining(a.expiryDate);
-        const remainingB = getDaysRemaining(b.expiryDate);
-        return remainingA - remainingB;
+        // Stokta ilaçlar alfabetik dizilsin (A'dan Z'ye)
+        return a.name.localeCompare(b.name, 'tr', { sensitivity: 'base' });
       });
   }, [products, searchQuery, selectedCategory, selectedOwner, statusFilter]);
 
@@ -211,7 +221,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         <Ionicons name="search-outline" size={18} color="#94A3B8" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="İlaç adı, etken madde veya barkod ara..."
+          placeholder="İlaç adı, ne için kullanılır veya barkod ara..."
           placeholderTextColor="#94A3B8"
           value={searchQuery}
           onChangeText={setSearchQuery}

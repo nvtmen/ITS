@@ -580,22 +580,53 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </View>
               )}
 
-              {/* BARKOD TARA + BARKOD NO (AYNI SATIRDA) */}
-              <View style={styles.barcodeCombinedRow}>
+              {/* 1. EN ÜSTTE YAN YANA 2 KARE BUTON: KAREKOD TARA & İLACI DOLABA KAYDET */}
+              <View style={styles.topActionSquaresRow}>
                 <TouchableOpacity
-                  style={styles.compactScanBtn}
+                  style={styles.scanSquareBtn}
                   onPress={() => setScannerVisible(true)}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="qr-code-outline" size={17} color="#FFFFFF" />
-                  <Text style={styles.compactScanBtnText}>Karekod / Barkod Tara</Text>
-                  {isSearchingBarcode && <ActivityIndicator color="#FFFFFF" size="small" />}
+                  <View style={styles.scanSquareIconCircle}>
+                    <Ionicons name="qr-code-outline" size={28} color="#0284C7" />
+                  </View>
+                  <Text style={styles.squareBtnTitle}>Karekod Tara</Text>
+                  <Text style={styles.squareBtnSub}>Kamera ile Oku</Text>
+                  {isSearchingBarcode && (
+                    <ActivityIndicator color="#0284C7" size="small" style={{ marginTop: 4 }} />
+                  )}
                 </TouchableOpacity>
 
-                <View style={styles.compactBarcodeInputBox}>
+                <TouchableOpacity
+                  style={[styles.saveSquareBtn, isSaving && styles.squareBtnDisabled]}
+                  onPress={handleSave}
+                  disabled={isSaving}
+                  activeOpacity={0.8}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator color="#059669" size="large" />
+                  ) : (
+                    <>
+                      <View style={styles.saveSquareIconCircle}>
+                        <Ionicons name="checkmark-done" size={28} color="#059669" />
+                      </View>
+                      <Text style={styles.saveSquareBtnTitle}>
+                        {isEditing ? 'Güncelle' : 'Dolaba Kaydet'}
+                      </Text>
+                      <Text style={styles.saveSquareBtnSub}>İlacı Sakla</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* 2. BARKOD NO (BİR ALT SATIRDA TEK BAŞINA) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Barkod / Karekod Numarası</Text>
+                <View style={styles.standaloneBarcodeInputBox}>
+                  <Ionicons name="barcode-outline" size={22} color="#64748B" style={{ marginLeft: 10 }} />
                   <TextInput
-                    style={styles.compactBarcodeTextInput}
-                    placeholder="869... Barkod No"
+                    style={styles.standaloneBarcodeTextInput}
+                    placeholder="869... Barkod no girin veya taratın"
                     placeholderTextColor="#94A3B8"
                     keyboardType="numeric"
                     value={barcode}
@@ -603,23 +634,24 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   />
                   {barcode.trim().length > 0 && (
                     <TouchableOpacity
-                      style={styles.compactBarcodeSearchBtn}
+                      style={styles.standaloneBarcodeSearchBtn}
                       onPress={() => handleBarcodeScanned(barcode.trim())}
                       disabled={isSearchingBarcode}
                     >
-                      <Ionicons name="search" size={14} color="#0284C7" />
+                      <Ionicons name="search" size={15} color="#FFFFFF" />
+                      <Text style={styles.standaloneBarcodeSearchText}>Sorgula</Text>
                     </TouchableOpacity>
                   )}
                 </View>
               </View>
 
-              {/* 1. İLAÇ SAHİBİ SEÇİMİ (ESRA - NEVZAT - DERİN - DORUK - NENE - GENEL) */}
-              <View style={styles.compactSection}>
-                <Text style={styles.compactLabel}>İlaç Ev Halkından Kime Ait? *</Text>
+              {/* 3. İLAÇ SAHİBİ SEÇİMİ (ESRA - NEVZAT - DERİN - DORUK - NENE - GENEL) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>İlaç Ev Halkından Kime Ait? *</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.compactMemberRow}
+                  contentContainerStyle={styles.memberScrollRow}
                 >
                   {(['ESRA', 'NEVZAT', 'DERİN', 'DORUK', 'NENE', 'GENEL'] as OwnerType[]).map(
                     (memberKey) => {
@@ -629,7 +661,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                         <TouchableOpacity
                           key={memberKey}
                           style={[
-                            styles.compactMemberChip,
+                            styles.memberChip,
                             isSelected
                               ? { backgroundColor: meta.color, borderColor: meta.color }
                               : { backgroundColor: meta.bgColor, borderColor: meta.borderColor },
@@ -639,12 +671,12 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                         >
                           <Ionicons
                             name={meta.avatarIcon as any}
-                            size={13}
+                            size={14}
                             color={isSelected ? '#FFFFFF' : meta.color}
                           />
                           <Text
                             style={[
-                              styles.compactMemberText,
+                              styles.memberChipText,
                               { color: isSelected ? '#FFFFFF' : meta.color },
                             ]}
                           >
@@ -657,13 +689,13 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </ScrollView>
               </View>
 
-              {/* 2. İLAÇ ADI VE KUTU FOTOĞRAFI (AYNI SATIRDA) */}
-              <View style={styles.compactSection}>
+              {/* 4. İLAÇ ADI VE KUTU FOTOĞRAFI */}
+              <View style={styles.inputGroup}>
                 <View style={styles.nameAndPhotoRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.compactLabel}>İlaç Adı ve Dozu *</Text>
+                    <Text style={styles.inputLabel}>İlaç Adı ve Dozu *</Text>
                     <TextInput
-                      style={styles.compactInput}
+                      style={styles.textInput}
                       placeholder="Örn: Benzoxin %5 + %1 Topikal Jel"
                       placeholderTextColor="#94A3B8"
                       value={name}
@@ -680,7 +712,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                       <Image source={{ uri: imageUrl }} style={styles.photoBoxImg} />
                     ) : (
                       <View style={styles.photoBoxEmpty}>
-                        <Ionicons name="camera-outline" size={17} color="#0284C7" />
+                        <Ionicons name="camera-outline" size={20} color="#0284C7" />
                         <Text style={styles.photoBoxEmptyText}>Kutu Resmi</Text>
                       </View>
                     )}
@@ -688,39 +720,38 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </View>
               </View>
 
-              {/* 3. NE İÇİN KULLANILIR? (KULLANIM AMACI / ENDİKASYON ÖZETİ) */}
-              <View style={styles.compactSection}>
+              {/* 5. NE İÇİN KULLANILIR? (3 SATIR GENİŞ ALAN) */}
+              <View style={styles.inputGroup}>
                 <View style={styles.labelWithHintRow}>
-                  <Text style={styles.compactLabel}>Ne İçin Kullanılır? (Kullanım Amacı)</Text>
+                  <Text style={styles.inputLabel}>Ne İçin Kullanılır? (Kullanım Amacı)</Text>
                   <Text style={styles.autoDetectHint}>✓ Otomatik doldurulur</Text>
                 </View>
                 <TextInput
-                  style={styles.compactInput}
-                  placeholder="Örn: Akne ve sivilce tedavisinde kullanılır"
+                  style={styles.multilineInput}
+                  placeholder="Örn: Akne ve sivilce tedavisinde, ciltteki iltihaplı gözenekleri kurutmada kullanılır..."
                   placeholderTextColor="#94A3B8"
                   value={indication}
                   onChangeText={setIndication}
+                  multiline={true}
+                  numberOfLines={3}
+                  textAlignVertical="top"
                 />
               </View>
 
-              {/* 4. İLAÇ KATEGORİSİ (BARKODDAN OTOMATİK SEÇİLİR, DOKUNARAK DEĞİŞTİRİLEBİLİR) */}
-              <View style={styles.compactSection}>
+              {/* 6. İLAÇ KATEGORİSİ (2 SATIR DÜZENİ) */}
+              <View style={styles.inputGroup}>
                 <View style={styles.labelWithHintRow}>
-                  <Text style={styles.compactLabel}>İlaç Kategorisi *</Text>
+                  <Text style={styles.inputLabel}>İlaç Kategorisi *</Text>
                   <Text style={styles.autoDetectHint}>✓ Otomatik seçilir</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalScrollList}
-                >
+                <View style={styles.twoRowWrapGrid}>
                   {ALL_CATEGORIES.map((cat) => {
                     const isSelected = category === cat.id;
                     return (
                       <TouchableOpacity
                         key={cat.id}
                         style={[
-                          styles.catOptionChip,
+                          styles.catWrapChip,
                           isSelected && {
                             backgroundColor: cat.color,
                             borderColor: cat.color,
@@ -731,12 +762,12 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                       >
                         <Ionicons
                           name={cat.icon as any}
-                          size={12}
+                          size={13}
                           color={isSelected ? '#FFFFFF' : cat.color}
                         />
                         <Text
                           style={[
-                            styles.catOptionText,
+                            styles.catWrapChipText,
                             isSelected && { color: '#FFFFFF', fontWeight: '800' },
                           ]}
                         >
@@ -745,45 +776,41 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
+                </View>
               </View>
 
-              {/* 5. FORM / BİRİM (BARKODDAN OTOMATİK SEÇİLİR, DOKUNARAK DEĞİŞTİRİLEBİLİR) */}
-              <View style={styles.compactSection}>
+              {/* 7. FORM / BİRİM (2 SATIR DÜZENİ) */}
+              <View style={styles.inputGroup}>
                 <View style={styles.labelWithHintRow}>
-                  <Text style={styles.compactLabel}>Form / Birim *</Text>
+                  <Text style={styles.inputLabel}>Form / Birim *</Text>
                   <Text style={styles.autoDetectHint}>✓ Otomatik seçilir</Text>
                 </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalScrollList}
-                >
+                <View style={styles.twoRowWrapGrid}>
                   {ALL_UNITS.map((u) => {
                     const isSelected = unit === u.id;
                     return (
                       <TouchableOpacity
                         key={u.id}
-                        style={[styles.unitChip, isSelected && styles.unitChipSelected]}
+                        style={[styles.unitWrapChip, isSelected && styles.unitWrapChipSelected]}
                         onPress={() => setUnit(u.id)}
                         activeOpacity={0.7}
                       >
                         <Text
-                          style={[styles.unitChipText, isSelected && styles.unitChipTextSelected]}
+                          style={[styles.unitWrapChipText, isSelected && styles.unitWrapChipTextSelected]}
                         >
                           {u.label}
                         </Text>
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
+                </View>
               </View>
 
-              {/* 6. MİAD (AA.YYYY FORMATINDA) VE MİKTAR */}
+              {/* 8. MİAD (AA.YYYY FORMATINDA) VE MİKTAR */}
               <View style={styles.rowTwoCols}>
-                <View style={[styles.compactSection, { flex: 1.4 }]}>
+                <View style={[styles.inputGroup, { flex: 1.4 }]}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={styles.compactLabel}>Miad (AA.YYYY) *</Text>
+                    <Text style={styles.inputLabel}>Miad (AA.YYYY) *</Text>
                     {visualMeta && (
                       <View style={[styles.visualBadge, { backgroundColor: visualMeta.badgeBg }]}>
                         <Text style={[styles.visualBadgeText, { color: visualMeta.badgeText }]}>
@@ -794,7 +821,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   </View>
                   <TextInput
                     style={[
-                      styles.compactInput,
+                      styles.textInput,
                       expiryDate && !isDateValid && styles.inputError,
                       isDateValid && styles.inputSuccess,
                     ]}
@@ -807,10 +834,10 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   />
                 </View>
 
-                <View style={[styles.compactSection, { flex: 0.8 }]}>
-                  <Text style={styles.compactLabel}>Miktar</Text>
+                <View style={[styles.inputGroup, { flex: 0.8 }]}>
+                  <Text style={styles.inputLabel}>Miktar</Text>
                   <TextInput
-                    style={styles.compactInput}
+                    style={styles.textInput}
                     placeholder="1"
                     placeholderTextColor="#94A3B8"
                     keyboardType="numeric"
@@ -820,17 +847,17 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </View>
               </View>
 
-              {/* 7. PROSPEKTÜS BAĞLANTISI */}
-              <View style={styles.compactSection}>
+              {/* 9. PROSPEKTÜS BAĞLANTISI */}
+              <View style={styles.inputGroup}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={styles.compactLabel}>Prospektüs Bağlantısı</Text>
+                  <Text style={styles.inputLabel}>Prospektüs Bağlantısı</Text>
                   <TouchableOpacity onPress={handleTestProspectus} style={styles.testProspectusBtn}>
-                    <Ionicons name="open-outline" size={12} color="#0284C7" />
+                    <Ionicons name="open-outline" size={13} color="#0284C7" />
                     <Text style={styles.testProspectusText}>Prospektüsü Aç</Text>
                   </TouchableOpacity>
                 </View>
                 <TextInput
-                  style={styles.compactInput}
+                  style={styles.textInput}
                   placeholder="İlaç adına göre otomatik oluşturulur"
                   placeholderTextColor="#94A3B8"
                   value={prospectusUrl}
@@ -945,104 +972,157 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scrollContent: {
-    paddingHorizontal: 12,
-    paddingBottom: 24,
+    paddingHorizontal: 16,
+    paddingBottom: 40,
   },
-  barcodeCombinedRow: {
+  topActionSquaresRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 7,
+    gap: 12,
+    marginBottom: 16,
   },
-  compactScanBtn: {
-    flex: 1.15,
-    flexDirection: 'row',
+  scanSquareBtn: {
+    flex: 1,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#0284C7',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 9,
+    elevation: 2,
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  compactScanBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+  scanSquareIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  squareBtnTitle: {
+    fontSize: 14,
     fontWeight: '800',
+    color: '#0284C7',
+    textAlign: 'center',
   },
-  compactBarcodeInputBox: {
+  squareBtnSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  saveSquareBtn: {
     flex: 1,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  saveSquareIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  saveSquareBtnTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#059669',
+    textAlign: 'center',
+  },
+  saveSquareBtnSub: {
+    fontSize: 11,
+    color: '#047857',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  squareBtnDisabled: {
+    opacity: 0.6,
+  },
+  standaloneBarcodeInputBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 9,
-    paddingHorizontal: 8,
-    height: 40,
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    height: 48,
   },
-  compactBarcodeTextInput: {
+  standaloneBarcodeTextInput: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13.5,
     color: '#0F172A',
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
-  compactBarcodeSearchBtn: {
-    padding: 4,
-  },
-  compactSection: {
-    marginBottom: 7,
-  },
-  compactLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#334155',
-    marginBottom: 3,
-  },
-  compactInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    fontSize: 12.5,
-    color: '#0F172A',
-    height: 38,
-  },
-  compactMemberRow: {
-    flexDirection: 'row',
-    gap: 5,
-    paddingVertical: 2,
-  },
-  compactMemberChip: {
+  standaloneBarcodeSearchBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 7,
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginRight: 4,
+  },
+  standaloneBarcodeSearchText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  memberScrollRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  memberChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
   },
-  compactMemberText: {
-    fontSize: 11,
+  memberChipText: {
+    fontSize: 12,
     fontWeight: '800',
   },
   nameAndPhotoRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8,
+    gap: 10,
   },
   photoBoxBtn: {
-    width: 54,
-    height: 38,
-    borderRadius: 8,
-    borderWidth: 1.2,
+    width: 60,
+    height: 48,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: '#BAE6FD',
     backgroundColor: '#F0F9FF',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'flex-end',
   },
   photoBoxImg: {
     width: '100%',
@@ -1054,10 +1134,65 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   photoBoxEmptyText: {
-    fontSize: 8,
+    fontSize: 8.5,
     fontWeight: '700',
     color: '#0284C7',
     marginTop: 1,
+  },
+  multilineInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    fontSize: 13.5,
+    color: '#0F172A',
+    minHeight: 76,
+    lineHeight: 20,
+  },
+  twoRowWrapGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    marginTop: 2,
+  },
+  catWrapChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  catWrapChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  unitWrapChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  unitWrapChipSelected: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  unitWrapChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  unitWrapChipTextSelected: {
+    color: '#FFFFFF',
   },
   scanButton: {
     flexDirection: 'row',
