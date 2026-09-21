@@ -9,6 +9,7 @@ import {
   StatusBar,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -106,9 +107,13 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoBadge}>
-            <Ionicons name="medkit" size={24} color="#FFFFFF" />
-            <View style={styles.logoPlus}>
-              <Ionicons name="add" size={10} color="#0284C7" />
+            <Image
+              source={require('../../assets/medicine_logo.png')}
+              style={styles.logoImage}
+              resizeMode="cover"
+            />
+            <View style={styles.logoSparkle}>
+              <Ionicons name="sparkles" size={9} color="#0284C7" />
             </View>
           </View>
 
@@ -329,26 +334,31 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   logoBadge: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     borderRadius: 13,
-    backgroundColor: '#0284C7',
+    backgroundColor: '#E0F2FE',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#0284C7',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
     position: 'relative',
   },
-  logoPlus: {
+  logoImage: {
+    width: 46,
+    height: 46,
+    borderRadius: 13,
+  },
+  logoSparkle: {
     position: 'absolute',
     top: -3,
     right: -3,
     backgroundColor: '#E0F2FE',
     borderRadius: 8,
-    padding: 1,
+    padding: 2,
     borderWidth: 1,
     borderColor: '#BAE6FD',
   },
