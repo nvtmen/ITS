@@ -23,6 +23,7 @@ import {
   FAMILY_MEMBERS,
 } from '../types/product';
 import { getDaysRemaining } from '../utils/dateUtils';
+import { APP_VERSION } from '../config/appVersion';
 
 export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { products, isLoading, decrementQuantity, deleteProduct } = useProducts();
@@ -135,7 +136,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 <Text style={styles.titleSuffix}> Dolabım</Text>
               </Text>
               <View style={styles.brandBadge}>
-                <Text style={styles.brandBadgeText}>AKILLI MİAD</Text>
+                <Text style={styles.brandBadgeText}>v{APP_VERSION}</Text>
               </View>
             </View>
             <Text style={styles.headerSubtitle}>İlaç Stok & Miad Takip Asistanı 💊</Text>

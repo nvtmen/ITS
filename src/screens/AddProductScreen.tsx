@@ -50,6 +50,104 @@ import {
 const ALL_CATEGORIES = Object.values(CATEGORIES);
 const ALL_UNITS = UNITS;
 
+// Helper to extract 13 or 14 core GTIN/barcode digits from ANY string
+function extractGtinDigits(str?: string): string | null {
+  if (!str) return null;
+  const s = String(str).trim();
+  const paren = s.match(/\(01\)(\d{13,14})/);
+  if (paren) {
+    const val = paren[1];
+    return val.length === 14 && val.startsWith('0') ? val.substring(1) : val;
+  }
+  const gs1 = s.match(/(?:^|[\x1D\u001d\x1e\x1c\s|])010?(\d{13})/);
+  if (gs1) return gs1[1];
+  const ean13 = s.match(/(?:^|\D)(86[89]\d{10})(?:\D|$)/);
+  if (ean13) return ean13[1];
+  const any13 = s.match(/(?:^|\D)(\d{13})(?:\D|$)/);
+  if (any13) return any13[1];
+  const digitsOnly = s.replace(/\D/g, '');
+  if (digitsOnly.length === 13) return digitsOnly;
+  if (digitsOnly.length === 14 && digitsOnly.startsWith('0')) return digitsOnly.substring(1);
+  return digitsOnly.length >= 8 ? digitsOnly : null;
+}
+
+// Helper to normalize Turkish medicine names for reliable comparison
+function normalizeMedName(name?: string): string {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// Bulletproof duplicate medication detection across all packaging formats
+function findDuplicateMedication(
+  productList: Product[],
+  currentId: string | undefined,
+  params: {
+    scannedRaw?: string;
+    barcode?: string;
+    serialNumber?: string;
+    name?: string;
+  }
+): Product | undefined {
+  const scannedGtin =
+    extractGtinDigits(params.barcode) ||
+    extractGtinDigits(params.scannedRaw);
+
+  const cleanScannedRaw = params.scannedRaw?.trim();
+  const cleanSerial = params.serialNumber?.trim();
+  const normInputName = normalizeMedName(params.name);
+
+  return productList.find((p) => {
+    if (currentId && p.id === currentId) return false;
+
+    // 1. EXACT SERIAL NUMBER MATCH (Each box in Turkey has a unique serial number)
+    if (cleanSerial && p.serialNumber && p.serialNumber.trim() === cleanSerial) {
+      return true;
+    }
+
+    // 2. EXACT RAW SCANNED CODE MATCH
+    if (cleanScannedRaw && p.rawCode && p.rawCode.trim() === cleanScannedRaw) {
+      return true;
+    }
+
+    // 3. GTIN / BARKOD EŞLEŞMESİ (En önemli ve en yaygın kontrol!)
+    if (scannedGtin) {
+      const pGtin =
+        extractGtinDigits(p.barcode) ||
+        extractGtinDigits(p.rawCode);
+
+      if (pGtin && pGtin === scannedGtin) {
+        return true;
+      }
+      if (p.barcode && params.barcode && p.barcode.trim() === params.barcode.trim()) {
+        return true;
+      }
+    }
+
+    // 4. İLAÇ ADI BİREBİR EŞLEŞMESİ (Örn: "Benzoxin" veya "Parol")
+    if (normInputName.length >= 4) {
+      const pNormName = normalizeMedName(p.name);
+      if (
+        pNormName.length >= 4 &&
+        (pNormName === normInputName ||
+          (normInputName.length >= 6 && pNormName.includes(normInputName)) ||
+          (pNormName.length >= 6 && normInputName.includes(pNormName)))
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+}
+
 export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
   navigation,
   route,
@@ -267,45 +365,22 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       const result = await fetchProductByBarcode(cleanScanned);
 
       // --- DUPLICATE CHECK: AYNI KAREKOD / İLAÇ STOKTA VAR MI? ---
-      const existing = products.find((p) => {
-        if (isEditing && editingProduct && p.id === editingProduct.id) {
-          return false;
+      const existing = findDuplicateMedication(
+        products,
+        isEditing ? editingProduct?.id : undefined,
+        {
+          scannedRaw: cleanScanned,
+          barcode: result.barcode || cleanScanned,
+          serialNumber: result.serialNumber,
+          name: result.name,
         }
-        // 1. İTS Karekod Tekil Seri Numarası eşleşmesi (Her kutunun seri no'su eşsizdir)
-        if (result.serialNumber && p.serialNumber && p.serialNumber === result.serialNumber) {
-          return true;
-        }
-        // 2. Taranan ham karekod metninin birebir aynı olması
-        if (p.rawCode && (p.rawCode === cleanScanned || (result.rawCode && p.rawCode === result.rawCode))) {
-          return true;
-        }
-        // 3. Barkod / GTIN eşleşmesi
-        const targetBarcode = result.barcode || cleanScanned;
-        if (p.barcode && targetBarcode) {
-          const matchBarcode =
-            p.barcode === targetBarcode ||
-            ('0' + p.barcode) === targetBarcode ||
-            p.barcode === ('0' + targetBarcode);
-
-          if (matchBarcode) {
-            // Eğer miad da varsa aynı miadlı kutu mu kontrol et
-            if (result.expiryDate && p.expiryDate) {
-              const resYM = result.expiryDate.substring(0, 7);
-              const pYM = p.expiryDate.substring(0, 7);
-              if (resYM === pYM) return true;
-            } else {
-              return true;
-            }
-          }
-        }
-        return false;
-      });
+      );
 
       if (existing) {
         Alert.alert(
           '⚠️ Bu İlaç Zaten Stokta!',
           `"${existing.name}" zaten ecza dolabınızda kayıtlı!\n\n` +
-          `📦 Mevcut Stok: ${existing.quantity} ${ALL_UNITS.find(u => u.id === existing.unit)?.label || existing.unit}\n` +
+          `📦 Mevcut Stok: ${existing.quantity} ${ALL_UNITS.find((u) => u.id === existing.unit)?.label || existing.unit}\n` +
           `📅 Son Kullanma: ${formatDisplayDate(existing.expiryDate)}\n` +
           `👤 Sahibi: ${existing.owner}\n\n` +
           `Aynı ilacı tekrar stoğa almak yerine mevcut stok miktarını 1 artırmak ister misiniz?`,
@@ -334,6 +409,9 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
             {
               text: 'Kapat',
               style: 'cancel',
+              onPress: () => {
+                resetForm();
+              },
             },
           ]
         );
@@ -343,12 +421,20 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           text: `⚠️ Bu ilaç zaten stokta kayıtlı: "${existing.name}" (Mevcut Miktar: ${existing.quantity})`,
         });
 
-        // Form alanlarını bilgilendirme amaçlı göster
-        if (result.name) setName(result.name);
-        if (result.barcode) setBarcode(result.barcode);
-        if (result.expiryDate) setExpiryDate(formatDisplayDate(result.expiryDate));
-        if (result.batchNumber) setBatchNumber(result.batchNumber);
-        if (result.serialNumber) setSerialNumber(result.serialNumber);
+        // Düzenleme moduna geçirerek çift kayıt açılmasını önle
+        setEditingProduct(existing);
+        setName(existing.name);
+        setBarcode(existing.barcode || '');
+        setCategory(existing.category);
+        setQuantity(String(existing.quantity));
+        setUnit(existing.unit);
+        setOwner(existing.owner);
+        setExpiryDate(formatDisplayDate(existing.expiryDate));
+        setIndication(existing.indication || '');
+        setImageUrl(existing.imageUrl || '');
+        setProspectusUrl(existing.prospectusUrl || '');
+        setBatchNumber(existing.batchNumber || '');
+        setSerialNumber(existing.serialNumber || '');
         setRawCode(cleanScanned);
         return;
       }
@@ -495,22 +581,18 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
 
       // --- DUPLICATE CHECK ON SAVE (YENİ EKLEMEDE AYNI İLAÇ KONTROLÜ) ---
       if (!isEditing) {
-        const duplicate = products.find((p) => {
-          if (serialNumber && p.serialNumber && p.serialNumber === serialNumber) return true;
-          if (rawCode && p.rawCode && p.rawCode === rawCode) return true;
-          if (barcode.trim() && p.barcode && (p.barcode === barcode.trim() || ('0' + p.barcode) === barcode.trim() || p.barcode === ('0' + barcode.trim()))) {
-            if (p.expiryDate && p.expiryDate.substring(0, 7) === isoExpiryDate) {
-              return true;
-            }
-          }
-          return false;
+        const duplicate = findDuplicateMedication(products, undefined, {
+          scannedRaw: rawCode,
+          barcode: barcode.trim(),
+          serialNumber: serialNumber.trim(),
+          name: cleanName,
         });
 
         if (duplicate) {
           Alert.alert(
             '⚠️ Bu İlaç Zaten Stokta!',
             `"${duplicate.name}" zaten ecza dolabınızda kayıtlı!\n\n` +
-            `📦 Mevcut Miktar: ${duplicate.quantity} ${ALL_UNITS.find(u => u.id === duplicate.unit)?.label || duplicate.unit}\n` +
+            `📦 Mevcut Miktar: ${duplicate.quantity} ${ALL_UNITS.find((u) => u.id === duplicate.unit)?.label || duplicate.unit}\n` +
             `📅 Son Kullanma: ${formatDisplayDate(duplicate.expiryDate)}\n\n` +
             `Aynı ilacı 2 kez stoğa almak yerine mevcut stok miktarını ${duplicate.quantity + cleanQty} yapmak ister misiniz?`,
             [

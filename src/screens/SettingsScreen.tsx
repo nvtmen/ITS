@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useProducts } from '../context/ProductContext';
 import { checkForAppUpdates } from '../services/updateService';
+import { APP_VERSION, APP_BUILD, APP_UPDATE_TIMESTAMP } from '../config/appVersion';
 import appConfig from '../../app.json';
 
 const CUSTOM_MED_CATALOG_KEY = '@ecza_dolabim_custom_catalog_v1';
@@ -230,7 +231,7 @@ export const SettingsScreen: React.FC = () => {
                 <View>
                   <Text style={styles.rowTitle}>Ecza Dolabım & İTS</Text>
                   <Text style={styles.rowDesc}>
-                    Sürüm {appConfig.expo.version} (Build {appConfig.expo.android?.versionCode || 1})
+                    Sürüm v{APP_VERSION} (Build {APP_BUILD}) • {APP_UPDATE_TIMESTAMP}
                   </Text>
                 </View>
               </View>

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ecza Dolabım",
     "slug": "ecza-dolabim",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.nvt.eczadolabim",
-      "versionCode": 1,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#E0F2FE",
         "foregroundImage": "./assets/android-icon-foreground.png"
@@ -49,7 +49,7 @@
     "updates": {
       "url": "https://u.expo.dev/5043b071-e9d2-4a92-bab2-690fdbbd8570"
     },
-    "runtimeVersion": "1.0.2",
+    "runtimeVersion": "1.2.0",
     "extra": {
       "eas": {
         "projectId": "5043b071-e9d2-4a92-bab2-690fdbbd8570"
