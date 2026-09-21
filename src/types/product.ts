@@ -83,6 +83,9 @@ export type UnitType =
 
 export type StorageCondition = 'room_temp' | 'refrigerator' | 'dark' | 'dry';
 
+export type DosageTime = 'morning' | 'noon' | 'evening' | 'night';
+export type MealCondition = 'full' | 'hungry' | 'water' | 'none';
+
 export interface Product {
   id: string;
   barcode?: string;
@@ -100,12 +103,35 @@ export interface Product {
   openedDate?: string; // Kutu/Şişe açılış tarihi (YYYY-MM-DD)
   usageInstructions?: string; // Kullanım tarifi (örn: Günde 2 kez tok)
   indication?: string; // Ne için kullanılır? (Kullanım amacı / endikasyon)
+  dosageTimes?: DosageTime[]; // Kullanım vakitleri (Sabah, Öğle, Akşam, Gece)
+  mealCondition?: MealCondition; // Aç/Tok kullanım durumu
+  dosageNotificationIds?: string[]; // Planlanmış dozaj bildirim kimlikleri
   imageUrl?: string;
   purchaseDate?: string; // YYYY-MM-DD or GG.AA.YYYY
   storageTip?: string;
   createdAt: string; // ISO String
   notificationId?: string; // expo-notifications scheduled notification id
 }
+
+export const DOSAGE_TIMES: Record<
+  DosageTime,
+  { id: DosageTime; label: string; icon: string; defaultHour: number; defaultMinute: number; emoji: string }
+> = {
+  morning: { id: 'morning', label: 'Sabah', icon: 'sunny-outline', defaultHour: 9, defaultMinute: 0, emoji: '🌅' },
+  noon: { id: 'noon', label: 'Öğle', icon: 'partly-sunny-outline', defaultHour: 13, defaultMinute: 0, emoji: '☀️' },
+  evening: { id: 'evening', label: 'Akşam', icon: 'moon-outline', defaultHour: 19, defaultMinute: 30, emoji: '🌙' },
+  night: { id: 'night', label: 'Gece', icon: 'bed-outline', defaultHour: 22, defaultMinute: 30, emoji: '🌜' },
+};
+
+export const MEAL_CONDITIONS: Record<
+  MealCondition,
+  { id: MealCondition; label: string; icon: string; emoji: string }
+> = {
+  full: { id: 'full', label: 'Tok Karnına', icon: 'restaurant-outline', emoji: '🥪' },
+  hungry: { id: 'hungry', label: 'Aç Karnına', icon: 'nutrition-outline', emoji: '🍽️' },
+  water: { id: 'water', label: 'Bol Su ile', icon: 'water-outline', emoji: '💧' },
+  none: { id: 'none', label: 'Fark Etmez', icon: 'checkmark-circle-outline', emoji: '✨' },
+};
 
 export type ExpiryStatus = 'expired' | 'critical' | 'warning' | 'safe';
 

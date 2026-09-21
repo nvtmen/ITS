@@ -33,6 +33,10 @@ import {
   UNITS,
   FAMILY_MEMBERS,
   Product,
+  DosageTime,
+  MealCondition,
+  DOSAGE_TIMES,
+  MEAL_CONDITIONS,
 } from '../types/product';
 import {
   parseDate,
@@ -174,6 +178,15 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
   const [batchNumber, setBatchNumber] = useState<string>('');
   const [serialNumber, setSerialNumber] = useState<string>('');
   const [rawCode, setRawCode] = useState<string>('');
+  const [dosageTimes, setDosageTimes] = useState<DosageTime[]>([]);
+  const [mealCondition, setMealCondition] = useState<MealCondition>('none');
+
+  // Toggle dosage time selection (multi-select)
+  const toggleDosageTime = (time: DosageTime) => {
+    setDosageTimes((prev) =>
+      prev.includes(time) ? prev.filter((t) => t !== time) : [...prev, time]
+    );
+  };
 
   // Scanner and Lookup states
   const [scannerVisible, setScannerVisible] = useState<boolean>(false);
@@ -197,6 +210,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     setBatchNumber('');
     setSerialNumber('');
     setRawCode('');
+    setDosageTimes([]);
+    setMealCondition('none');
     setScanMessage(null);
     setEntryMode('standard');
     setCatalogSearch('');
@@ -221,6 +236,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       setBatchNumber(item.batchNumber || '');
       setSerialNumber(item.serialNumber || '');
       setRawCode(item.rawCode || '');
+      setDosageTimes(item.dosageTimes || []);
+      setMealCondition(item.mealCondition || 'none');
       setScanMessage(null);
       setEntryMode('standard');
     }
@@ -633,6 +650,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           unit,
           owner,
           indication: indication.trim() || undefined,
+          dosageTimes: dosageTimes.length > 0 ? dosageTimes : undefined,
+          mealCondition: mealCondition !== 'none' ? mealCondition : undefined,
           imageUrl: imageUrl.trim() || undefined,
           prospectusUrl: finalProspectusUrl,
           batchNumber: batchNumber.trim() || editingProduct.batchNumber,
@@ -653,6 +672,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           unit,
           owner,
           indication: indication.trim() || undefined,
+          dosageTimes: dosageTimes.length > 0 ? dosageTimes : undefined,
+          mealCondition: mealCondition !== 'none' ? mealCondition : undefined,
           imageUrl: imageUrl.trim() || undefined,
           prospectusUrl: finalProspectusUrl,
           batchNumber: batchNumber.trim() || undefined,
@@ -1041,6 +1062,60 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                           style={[styles.unitWrapChipText, isSelected && styles.unitWrapChipTextSelected]}
                         >
                           {u.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* KULLANIM VAKİTLERİ (HATIRLATICI) */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelWithHintRow}>
+                  <Text style={styles.inputLabel}>Kullanım Vakitleri (Hatırlatıcı)</Text>
+                  <Text style={styles.autoDetectHint}>Birden fazla seçilebilir</Text>
+                </View>
+                <View style={styles.dosageGrid}>
+                  {(['morning', 'noon', 'evening', 'night'] as DosageTime[]).map((timeKey) => {
+                    const isSelected = dosageTimes.includes(timeKey);
+                    const dt = DOSAGE_TIMES[timeKey];
+                    return (
+                      <TouchableOpacity
+                        key={timeKey}
+                        style={[styles.dosageChip, isSelected && styles.dosageChipSelected]}
+                        onPress={() => toggleDosageTime(timeKey)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.dosageEmoji}>{dt.emoji}</Text>
+                        <Text style={[styles.dosageChipText, isSelected && styles.dosageChipTextSelected]}>
+                          {dt.label}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons name="checkmark-circle" size={14} color="#0284C7" />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* KULLANIM ŞEKLİ (AÇ / TOK) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Kullanım Şekli</Text>
+                <View style={styles.mealGrid}>
+                  {(['full', 'hungry', 'water', 'none'] as MealCondition[]).map((mealKey) => {
+                    const isSelected = mealCondition === mealKey;
+                    const mc = MEAL_CONDITIONS[mealKey];
+                    return (
+                      <TouchableOpacity
+                        key={mealKey}
+                        style={[styles.mealChip, isSelected && styles.mealChipSelected]}
+                        onPress={() => setMealCondition(mealKey)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.mealEmoji}>{mc.emoji}</Text>
+                        <Text style={[styles.mealChipText, isSelected && styles.mealChipTextSelected]}>
+                          {mc.label}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1686,5 +1761,77 @@ const styles = StyleSheet.create({
   catalogItemDetail: {
     fontSize: 11,
     color: '#64748B',
+  },
+  dosageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  dosageChip: {
+    flex: 1,
+    minWidth: '46%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  dosageChipSelected: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#0284C7',
+  },
+  dosageEmoji: {
+    fontSize: 16,
+  },
+  dosageChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  dosageChipTextSelected: {
+    color: '#0369A1',
+    fontWeight: '800',
+  },
+  mealGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  mealChip: {
+    flex: 1,
+    minWidth: '46%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  mealChipSelected: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#059669',
+  },
+  mealEmoji: {
+    fontSize: 15,
+  },
+  mealChipText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  mealChipTextSelected: {
+    color: '#065F46',
+    fontWeight: '800',
   },
 });

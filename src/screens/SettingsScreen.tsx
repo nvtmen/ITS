@@ -7,6 +7,7 @@ import {
   Switch,
   Alert,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +15,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useProducts } from '../context/ProductContext';
 import { checkForAppUpdates } from '../services/updateService';
 import { APP_VERSION, APP_BUILD, APP_UPDATE_TIMESTAMP } from '../config/appVersion';
+import { OwnerType, FAMILY_MEMBERS } from '../types/product';
+import {
+  getFamilyPhoneNumbers,
+  saveFamilyPhoneNumbers,
+  FamilyPhoneMap,
+  DEFAULT_FAMILY_PHONES,
+} from '../services/whatsappService';
 import appConfig from '../../app.json';
 
 const CUSTOM_MED_CATALOG_KEY = '@ecza_dolabim_custom_catalog_v1';
@@ -23,6 +31,8 @@ export const SettingsScreen: React.FC = () => {
   const { products, refreshProducts, clearAllProducts } = useProducts();
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true);
   const [learnedCount, setLearnedCount] = useState<number>(0);
+  const [familyPhones, setFamilyPhones] = useState<FamilyPhoneMap>(DEFAULT_FAMILY_PHONES);
+  const [isSavingPhones, setIsSavingPhones] = useState<boolean>(false);
 
   useEffect(() => {
     loadSettings();
@@ -40,8 +50,23 @@ export const SettingsScreen: React.FC = () => {
         const catalog = JSON.parse(catalogRaw);
         setLearnedCount(Object.keys(catalog).length);
       }
+
+      const phones = await getFamilyPhoneNumbers();
+      setFamilyPhones(phones);
     } catch (e) {
       console.warn('Ayarlar yüklenirken hata:', e);
+    }
+  };
+
+  const handleSavePhones = async () => {
+    try {
+      setIsSavingPhones(true);
+      await saveFamilyPhoneNumbers(familyPhones);
+      Alert.alert('Başarılı ✅', 'Aile WhatsApp telefon rehberi kaydedildi.');
+    } catch (e) {
+      Alert.alert('Hata', 'Telefon numaraları kaydedilemedi.');
+    } finally {
+      setIsSavingPhones(false);
     }
   };
 
@@ -139,6 +164,72 @@ export const SettingsScreen: React.FC = () => {
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Section: Aile Üyeleri WhatsApp Telefon Rehberi */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>AİLE ÜYELERİ WHATSAPP REHBERİ</Text>
+          <View style={styles.card}>
+            <View style={styles.phoneIntroRow}>
+              <View style={[styles.iconBox, { backgroundColor: '#ECFDF5' }]}>
+                <Ionicons name="logo-whatsapp" size={20} color="#059669" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>Kişisel Hatırlatma Numaraları</Text>
+                <Text style={styles.rowDesc}>
+                  İlaç vakti geldiğinde doğrudan bu numaralara WhatsApp hatırlatması gönderilir.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            {(['ESRA', 'NEVZAT', 'DERİN', 'DORUK', 'NENE'] as OwnerType[]).map((memberKey, index) => {
+              const meta = FAMILY_MEMBERS[memberKey];
+              return (
+                <View key={memberKey}>
+                  {index > 0 && <View style={styles.dividerLight} />}
+                  <View style={styles.phoneInputRow}>
+                    <View style={styles.phoneMemberInfo}>
+                      <View
+                        style={[
+                          styles.miniAvatarBox,
+                          { backgroundColor: meta.bgColor, borderColor: meta.borderColor },
+                        ]}
+                      >
+                        <Ionicons name={meta.avatarIcon as any} size={14} color={meta.color} />
+                      </View>
+                      <Text style={[styles.phoneMemberName, { color: meta.color }]}>{meta.label}</Text>
+                    </View>
+                    <TextInput
+                      style={styles.phoneInput}
+                      placeholder="05xx xxx xx xx"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="phone-pad"
+                      value={familyPhones[memberKey] || ''}
+                      onChangeText={(val) =>
+                        setFamilyPhones((prev) => ({ ...prev, [memberKey]: val }))
+                      }
+                    />
+                  </View>
+                </View>
+              );
+            })}
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity
+              style={[styles.savePhonesBtn, isSavingPhones && styles.savePhonesBtnDisabled]}
+              onPress={handleSavePhones}
+              disabled={isSavingPhones}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-done-circle" size={18} color="#FFFFFF" />
+              <Text style={styles.savePhonesBtnText}>
+                {isSavingPhones ? 'Kaydediliyor...' : 'Rehberi Kaydet'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -406,5 +497,79 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94A3B8',
     marginTop: 4,
+  },
+  phoneIntroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+  },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  phoneMemberInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: 100,
+  },
+  miniAvatarBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  phoneMemberName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  phoneInput: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13.5,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+  dividerLight: {
+    height: 1,
+    backgroundColor: '#F8FAFC',
+    marginHorizontal: 14,
+  },
+  savePhonesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    marginHorizontal: 14,
+    marginVertical: 12,
+    paddingVertical: 11,
+    borderRadius: 10,
+    gap: 6,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  savePhonesBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+  },
+  savePhonesBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

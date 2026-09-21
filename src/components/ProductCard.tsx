@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, Image, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Product, CATEGORIES, FAMILY_MEMBERS } from '../types/product';
+import { Product, CATEGORIES, FAMILY_MEMBERS, DOSAGE_TIMES, MEAL_CONDITIONS } from '../types/product';
 import { getDaysRemaining, getExpiryVisualMeta, formatDisplayDate } from '../utils/dateUtils';
 import { getMedicationEmoji, getProspectusSearchUrl } from '../data/medicationData';
+import { sendWhatsAppReminder, formatDosageSummary } from '../services/whatsappService';
 
 interface ProductCardProps {
   product: Product;
@@ -26,10 +27,33 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const isExpired = daysRemaining < 0;
 
+  const hasDosage =
+    (product.dosageTimes && product.dosageTimes.length > 0) ||
+    (product.mealCondition && product.mealCondition !== 'none');
+
+  const handleWhatsAppReminder = async () => {
+    const res = await sendWhatsAppReminder({
+      owner: product.owner,
+      medicineName: product.name,
+      dosageTimes: product.dosageTimes,
+      mealCondition: product.mealCondition,
+      customNote: product.usageInstructions,
+    });
+
+    if (!res.success && res.error === 'NO_PHONE') {
+      Alert.alert(
+        'Telefon Numarası Tanımlanmamış ⚠️',
+        `"${ownerMeta.label}" için kayıtlı bir WhatsApp telefon numarası bulunamadı. Lütfen Ayarlar sayfasından numarayı kaydedin.`,
+        [{ text: 'Tamam' }]
+      );
+    }
+  };
+
   const handleShareProduct = async () => {
     const details = [
       `💊 ${product.name}`,
       product.indication ? `📌 Ne İçin Kullanılır: ${product.indication}` : null,
+      hasDosage ? `⏰ Kullanım Vakti: ${formatDosageSummary(product.dosageTimes, product.mealCondition)}` : null,
       `📅 Son Kullanma Tarihi: ${formatDisplayDate(product.expiryDate)} (${visualMeta.label})`,
       `📦 Mevcut Stok: ${product.quantity} ${product.unit}`,
       `🏷️ Kategori: ${categoryMeta.label}`,
@@ -164,6 +188,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </View>
       )}
 
+      {/* Kullanım Vakitleri / Dozaj Özeti */}
+      {hasDosage && (
+        <View style={styles.dosageInfoBox}>
+          <Ionicons name="time-outline" size={13} color="#0369A1" />
+          <Text style={styles.dosageInfoText} numberOfLines={1}>
+            {formatDosageSummary(product.dosageTimes, product.mealCondition)}
+          </Text>
+        </View>
+      )}
+
       {/* Miadı Geçmişse Kırmızı Uyarı */}
       {isExpired && (
         <View style={styles.expiredWarningStrip}>
@@ -174,7 +208,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </View>
       )}
 
-      {/* Alt Aksiyon Butonları: Prospektüs, Paylaş, 1 Azalt, Sil */}
+      {/* Alt Aksiyon Butonları: Prospektüs, Paylaş, WhatsApp Hatırlat, 1 Azalt, Sil */}
       <View style={styles.actionsBar}>
         <View style={styles.leftActionGroup}>
           <TouchableOpacity
@@ -191,8 +225,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             onPress={handleShareProduct}
             activeOpacity={0.7}
           >
-            <Ionicons name="share-social-outline" size={13} color="#059669" />
+            <Ionicons name="share-social-outline" size={13} color="#475569" />
             <Text style={styles.shareButtonText}>Paylaş</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.whatsappButton}
+            onPress={handleWhatsAppReminder}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="logo-whatsapp" size={13} color="#059669" />
+            <Text style={styles.whatsappButtonText}>Hatırlat</Text>
           </TouchableOpacity>
         </View>
 
@@ -406,7 +449,41 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0284C7',
   },
+  dosageInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  dosageInfoText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0369A1',
+    flex: 1,
+  },
   shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  shareButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  whatsappButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -417,7 +494,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
-  shareButtonText: {
+  whatsappButtonText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#059669',

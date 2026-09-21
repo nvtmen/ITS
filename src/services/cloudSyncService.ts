@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../config/supabase';
-import { Product, CategoryType, UnitType, OwnerType, StorageCondition } from '../types/product';
+import { Product, CategoryType, UnitType, OwnerType, StorageCondition, DosageTime, MealCondition } from '../types/product';
 
 export interface ProductRow {
   id: string;
@@ -26,6 +26,8 @@ export function rowToProduct(row: ProductRow): Product {
   let purchaseDate: string | undefined;
   let usageInstructions: string | undefined;
   let indication: string | undefined;
+  let dosageTimes: DosageTime[] | undefined;
+  let mealCondition: MealCondition | undefined;
   let actualImageUrl: string | undefined = row.image_url || undefined;
 
   // Packed metadata check
@@ -43,6 +45,8 @@ export function rowToProduct(row: ProductRow): Product {
       if (parsed.purchaseDate) purchaseDate = parsed.purchaseDate;
       if (parsed.usageInstructions) usageInstructions = parsed.usageInstructions;
       if (parsed.indication) indication = parsed.indication;
+      if (parsed.dosageTimes) dosageTimes = parsed.dosageTimes;
+      if (parsed.mealCondition) mealCondition = parsed.mealCondition;
       actualImageUrl = parsed.imageUrl || undefined;
     } catch (e) {
       // Fallback
@@ -68,6 +72,8 @@ export function rowToProduct(row: ProductRow): Product {
     purchaseDate,
     usageInstructions,
     indication,
+    dosageTimes,
+    mealCondition,
     imageUrl: actualImageUrl,
     createdAt: row.created_at,
   };
@@ -87,6 +93,8 @@ export function productToRow(product: Product): ProductRow {
     purchaseDate: product.purchaseDate,
     usageInstructions: product.usageInstructions,
     indication: product.indication,
+    dosageTimes: product.dosageTimes,
+    mealCondition: product.mealCondition,
     imageUrl: product.imageUrl,
   };
 

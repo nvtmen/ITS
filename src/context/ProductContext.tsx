@@ -1,7 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Product } from '../types/product';
-import { scheduleExpiryNotification, cancelNotification } from '../services/notificationService';
+import {
+  scheduleExpiryNotification,
+  cancelNotification,
+  scheduleDailyDosageNotifications,
+  cancelDosageNotifications,
+  setupNotificationResponseListener,
+} from '../services/notificationService';
 import { getDaysRemaining, formatDateToIso } from '../utils/dateUtils';
 import { detectIndication } from '../services/barcodeService';
 import {
@@ -181,8 +187,11 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
     );
 
+    const unsubResponse = setupNotificationResponseListener();
+
     return () => {
       unsubscribe();
+      unsubResponse();
     };
   }, []);
 
@@ -243,6 +252,9 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
                 rawCode: cp.rawCode || localMatch?.rawCode,
                 usageInstructions: cp.usageInstructions || localMatch?.usageInstructions,
                 storageTip: cp.storageTip || localMatch?.storageTip,
+                dosageTimes: cp.dosageTimes || localMatch?.dosageTimes,
+                mealCondition: cp.mealCondition || localMatch?.mealCondition,
+                dosageNotificationIds: localMatch?.dosageNotificationIds,
                 imageUrl: cp.imageUrl || localMatch?.imageUrl,
               };
             });
@@ -290,11 +302,26 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
       console.warn('Could not schedule notification during medication add:', error);
     }
 
+    let dosageNotificationIds: string[] | undefined;
+    try {
+      if (productInput.dosageTimes && productInput.dosageTimes.length > 0) {
+        dosageNotificationIds = await scheduleDailyDosageNotifications({
+          name: productInput.name,
+          owner: productInput.owner,
+          dosageTimes: productInput.dosageTimes,
+          mealCondition: productInput.mealCondition,
+        });
+      }
+    } catch (error) {
+      console.warn('Could not schedule dosage notifications:', error);
+    }
+
     const newProduct: Product = {
       ...productInput,
       id: newId,
       createdAt,
       notificationId,
+      dosageNotificationIds,
     };
 
     const updated = [newProduct, ...products];
@@ -315,6 +342,9 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (existing?.notificationId) {
       await cancelNotification(existing.notificationId);
     }
+    if (existing?.dosageNotificationIds) {
+      await cancelDosageNotifications(existing.dosageNotificationIds);
+    }
 
     const updated = products.filter((p) => p.id !== id);
     setProducts(updated);
@@ -329,9 +359,42 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const updateProduct = async (id: string, updates: Partial<Product>): Promise<void> => {
     let targetUpdated: Product | undefined;
+    const existing = products.find((p) => p.id === id);
+
+    let nextDosageNotificationIds = existing?.dosageNotificationIds;
+    if (
+      updates.dosageTimes !== undefined ||
+      updates.mealCondition !== undefined ||
+      updates.owner !== undefined ||
+      updates.name !== undefined
+    ) {
+      if (existing?.dosageNotificationIds) {
+        await cancelDosageNotifications(existing.dosageNotificationIds);
+      }
+      const times = updates.dosageTimes !== undefined ? updates.dosageTimes : existing?.dosageTimes;
+      const owner = updates.owner !== undefined ? updates.owner : existing?.owner || 'GENEL';
+      const name = updates.name !== undefined ? updates.name : existing?.name || '';
+      const meal = updates.mealCondition !== undefined ? updates.mealCondition : existing?.mealCondition;
+
+      if (times && times.length > 0) {
+        try {
+          nextDosageNotificationIds = await scheduleDailyDosageNotifications({
+            name,
+            owner,
+            dosageTimes: times,
+            mealCondition: meal,
+          });
+        } catch (e) {
+          console.warn('Error rescheduling dosage notifications:', e);
+        }
+      } else {
+        nextDosageNotificationIds = undefined;
+      }
+    }
+
     const updated = products.map((product) => {
       if (product.id === id) {
-        targetUpdated = { ...product, ...updates };
+        targetUpdated = { ...product, ...updates, dosageNotificationIds: nextDosageNotificationIds };
         return targetUpdated;
       }
       return product;

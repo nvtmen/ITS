@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
 import { isRunningInExpoGo } from 'expo';
-import { Product } from '../types/product';
+import { Product, DosageTime, MealCondition, DOSAGE_TIMES, MEAL_CONDITIONS, FAMILY_MEMBERS } from '../types/product';
 import { parseDate } from '../utils/dateUtils';
+import { sendWhatsAppReminder } from './whatsappService';
 
 // In Expo Go on Android (SDK 53+), expo-notifications throws a fatal error because
 // push notification infrastructure was removed from Expo Go on Android.
@@ -65,7 +66,6 @@ export async function scheduleExpiryNotification(
   product: Pick<Product, 'name' | 'expiryDate' | 'quantity' | 'unit'>
 ): Promise<string | undefined> {
   if (isUnsupportedInExpoGo || !Notifications) {
-    // In Expo Go Android, simulate scheduled notification safely
     console.log(
       `[Expo Go Simülasyonu] "${product.name}" için SKT hatırlatıcı bildirimi planlandı (1 gün kala 09:00).`
     );
@@ -81,7 +81,6 @@ export async function scheduleExpiryNotification(
     const expiryObj = parseDate(product.expiryDate);
     if (!expiryObj || isNaN(expiryObj.getTime())) return undefined;
 
-    // Target trigger: 1 day before expiry at 09:00:00
     const triggerDate = new Date(
       expiryObj.getFullYear(),
       expiryObj.getMonth(),
@@ -92,7 +91,6 @@ export async function scheduleExpiryNotification(
     );
     const now = new Date();
 
-    // If trigger date has already passed, don't schedule a past notification
     if (triggerDate.getTime() <= now.getTime()) {
       return undefined;
     }
@@ -108,7 +106,7 @@ export async function scheduleExpiryNotification(
         },
       },
       trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        type: Notifications.SchedulableTriggerInputTypes?.DATE || 'date',
         date: triggerDate,
       },
     });
@@ -121,7 +119,68 @@ export async function scheduleExpiryNotification(
 }
 
 /**
- * Cancels a previously scheduled notification if an id exists.
+ * Seçilen kullanım vakitleri (Sabah, Öğle, Akşam, Gece) için her gün tekrarlayan yerel bildirimler kurar.
+ */
+export async function scheduleDailyDosageNotifications(
+  product: Pick<Product, 'name' | 'owner' | 'dosageTimes' | 'mealCondition'>
+): Promise<string[]> {
+  const times = product.dosageTimes || [];
+  if (times.length === 0) return [];
+
+  if (isUnsupportedInExpoGo || !Notifications) {
+    console.log(
+      `[Expo Go Simülasyonu] "${product.name}" için günlük dozaj bildirimleri planlandı (${times.join(', ')}).`
+    );
+    return times.map((t) => `mock-dosage-${t}-${Date.now()}`);
+  }
+
+  const ids: string[] = [];
+  try {
+    const hasPermission = await requestNotificationPermissions();
+    if (!hasPermission) return [];
+
+    const ownerName = FAMILY_MEMBERS[product.owner]?.label || product.owner;
+    const mealText = product.mealCondition && product.mealCondition !== 'none'
+      ? ` • ${MEAL_CONDITIONS[product.mealCondition].emoji} ${MEAL_CONDITIONS[product.mealCondition].label}`
+      : '';
+
+    for (const t of times) {
+      const config = DOSAGE_TIMES[t];
+      if (!config) continue;
+
+      const notifId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `⏰ İlaç Vakti: ${ownerName} - ${product.name}`,
+          body: `${config.emoji} ${config.label} dozu vaktiniz geldi${mealText}. WhatsApp ile hatırlatmak için dokunun! 💬`,
+          sound: true,
+          data: {
+            type: 'dosage_reminder',
+            owner: product.owner,
+            medicineName: product.name,
+            dosageTime: t,
+            mealCondition: product.mealCondition,
+          },
+        },
+        trigger: {
+          hour: config.defaultHour,
+          minute: config.defaultMinute,
+          repeats: true,
+        },
+      });
+
+      if (notifId) {
+        ids.push(notifId);
+      }
+    }
+  } catch (error) {
+    console.warn('Günlük dozaj bildirimi planlanırken hata:', error);
+  }
+
+  return ids;
+}
+
+/**
+ * Planlanmış bildirimi iptal eder
  */
 export async function cancelNotification(notificationId?: string): Promise<void> {
   if (!notificationId || isUnsupportedInExpoGo || !Notifications) return;
@@ -131,3 +190,44 @@ export async function cancelNotification(notificationId?: string): Promise<void>
     console.warn('Error canceling notification:', error);
   }
 }
+
+/**
+ * Birden fazla dozaj bildirimini topluca iptal eder
+ */
+export async function cancelDosageNotifications(notificationIds?: string[]): Promise<void> {
+  if (!notificationIds || notificationIds.length === 0) return;
+  for (const id of notificationIds) {
+    await cancelNotification(id);
+  }
+}
+
+/**
+ * Bildirime dokunulduğunda doğrudan ilgili kişinin WhatsApp'ını açan dinleyiciyi başlatır
+ */
+export function setupNotificationResponseListener(): () => void {
+  if (isUnsupportedInExpoGo || !Notifications) {
+    return () => {};
+  }
+
+  try {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response: any) => {
+      const data = response?.notification?.request?.content?.data;
+      if (data && data.type === 'dosage_reminder' && data.owner && data.medicineName) {
+        sendWhatsAppReminder({
+          owner: data.owner,
+          medicineName: data.medicineName,
+          dosageTimes: data.dosageTime ? [data.dosageTime] : undefined,
+          mealCondition: data.mealCondition,
+        }).catch((err) => console.warn('Notification tap WhatsApp error:', err));
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  } catch (err) {
+    console.warn('Notification response listener kurulamadı:', err);
+    return () => {};
+  }
+}
+
