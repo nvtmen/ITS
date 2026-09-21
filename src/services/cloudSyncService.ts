@@ -18,7 +18,14 @@ export function rowToProduct(row: ProductRow): Product {
   let owner: OwnerType = 'GENEL';
   let prospectusUrl: string | undefined;
   let batchNumber: string | undefined;
+  let serialNumber: string | undefined;
+  let rawCode: string | undefined;
   let storageCondition: StorageCondition | undefined;
+  let storageTip: string | undefined;
+  let openedDate: string | undefined;
+  let purchaseDate: string | undefined;
+  let usageInstructions: string | undefined;
+  let indication: string | undefined;
   let actualImageUrl: string | undefined = row.image_url || undefined;
 
   // Packed metadata check
@@ -28,7 +35,14 @@ export function rowToProduct(row: ProductRow): Product {
       if (parsed.owner) owner = parsed.owner;
       if (parsed.prospectusUrl) prospectusUrl = parsed.prospectusUrl;
       if (parsed.batchNumber) batchNumber = parsed.batchNumber;
+      if (parsed.serialNumber) serialNumber = parsed.serialNumber;
+      if (parsed.rawCode) rawCode = parsed.rawCode;
       if (parsed.storageCondition) storageCondition = parsed.storageCondition;
+      if (parsed.storageTip) storageTip = parsed.storageTip;
+      if (parsed.openedDate) openedDate = parsed.openedDate;
+      if (parsed.purchaseDate) purchaseDate = parsed.purchaseDate;
+      if (parsed.usageInstructions) usageInstructions = parsed.usageInstructions;
+      if (parsed.indication) indication = parsed.indication;
       actualImageUrl = parsed.imageUrl || undefined;
     } catch (e) {
       // Fallback
@@ -46,7 +60,14 @@ export function rowToProduct(row: ProductRow): Product {
     owner,
     prospectusUrl,
     batchNumber,
+    serialNumber,
+    rawCode,
     storageCondition,
+    storageTip,
+    openedDate,
+    purchaseDate,
+    usageInstructions,
+    indication,
     imageUrl: actualImageUrl,
     createdAt: row.created_at,
   };
@@ -58,7 +79,14 @@ export function productToRow(product: Product): ProductRow {
     owner: product.owner || 'GENEL',
     prospectusUrl: product.prospectusUrl,
     batchNumber: product.batchNumber,
+    serialNumber: product.serialNumber,
+    rawCode: product.rawCode,
     storageCondition: product.storageCondition,
+    storageTip: product.storageTip,
+    openedDate: product.openedDate,
+    purchaseDate: product.purchaseDate,
+    usageInstructions: product.usageInstructions,
+    indication: product.indication,
     imageUrl: product.imageUrl,
   };
 

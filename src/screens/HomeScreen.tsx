@@ -70,16 +70,16 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       .map((name, index) => `${index + 1}. ${name}`)
       .join('\n');
 
-    const shareContent = `📋 Anlık Ecza Dolabımız\n📅 Tarih: ${day}.${month}.${year} ${time}\n💊 Toplam: ${cabinetMedicationNames.length} İlaç\n\n${itemsText}\n\nSağlıklı günler dileriz! 🌿`;
+    const shareContent = `📋 Mendeş Home Ecza Dolap Durumu\n📅 Tarih: ${day}.${month}.${year} ${time}\n💊 Toplam: ${cabinetMedicationNames.length} İlaç\n\n${itemsText}\n\nSağlıklı günler dileriz! 🌿`;
 
     try {
       await Share.share(
         {
-          title: 'Anlık Ecza Dolabımız',
+          title: 'Mendeş Home Ecza Dolap Durumu',
           message: shareContent,
         },
         {
-          dialogTitle: 'Anlık Ecza Dolabımız - İlaç Listesini Paylaş',
+          dialogTitle: 'Mendeş Home Ecza Dolap Durumu - İlaç Listesini Paylaş',
         }
       );
     } catch (error) {
@@ -241,9 +241,9 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             <Ionicons name="receipt-outline" size={18} color="#0284C7" />
           </View>
           <View style={styles.showCabinetListTextGroup}>
-            <Text style={styles.showCabinetListBtnTitle}>Evdeki İlaç Listesini Göster</Text>
+            <Text style={styles.showCabinetListBtnTitle}>Mendeş Home Ecza Dolap Durumu</Text>
             <Text style={styles.showCabinetListBtnSub}>
-              Tek satır ilaç adları • Anlık Ecza Dolabımız olarak paylaş
+              Tek satır ilaç adları • Paylaşılabilir anlık liste
             </Text>
           </View>
         </View>
@@ -422,7 +422,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   <Ionicons name="receipt" size={20} color="#0284C7" />
                 </View>
                 <View>
-                  <Text style={styles.modalTitle}>Anlık Ecza Dolabımız</Text>
+                  <Text style={styles.modalTitle}>Mendeş Home Ecza Dolap Durumu</Text>
                   <Text style={styles.modalSubTitle}>
                     {cabinetMedicationNames.length} Farklı İlaç (A'dan Z'ye Sıralı)
                   </Text>
@@ -486,7 +486,7 @@ export const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 activeOpacity={0.8}
               >
                 <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
-                <Text style={styles.modalShareBtnText}>Paylaş (Anlık Ecza Dolabımız)</Text>
+                <Text style={styles.modalShareBtnText}>Paylaş (Mendeş Home Ecza Dolap Durumu)</Text>
               </TouchableOpacity>
             </View>
           </View>

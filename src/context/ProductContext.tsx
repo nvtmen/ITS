@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Product } from '../types/product';
 import { scheduleExpiryNotification, cancelNotification } from '../services/notificationService';
 import { getDaysRemaining, formatDateToIso } from '../utils/dateUtils';
+import { detectIndication } from '../services/barcodeService';
 import {
   fetchProductsFromCloud,
   upsertProductToCloud,
@@ -62,6 +63,7 @@ function getInitialSampleProducts(): Product[] {
       expiryDate: formatDateToIso(d120),
       quantity: 20,
       unit: 'tablet',
+      indication: 'Ağrı kesici ve ateş düşürücü',
       storageCondition: 'room_temp',
       storageTip: '25°C altındaki oda sıcaklığında saklayınız.',
       prospectusUrl: 'https://www.ilacrehberi.com/v/parol-500-mg-20-tablet-876b/kt/',
@@ -76,6 +78,7 @@ function getInitialSampleProducts(): Product[] {
       expiryDate: formatDateToIso(soonDate),
       quantity: 12,
       unit: 'tablet',
+      indication: 'Ağrı ve iltihap giderici',
       storageCondition: 'room_temp',
       storageTip: '30°C altında oda sıcaklığında saklayınız.',
       prospectusUrl: 'https://www.ilacrehberi.com/v/arveles-25-mg-20-film-tablet-507c/kt/',
@@ -90,6 +93,7 @@ function getInitialSampleProducts(): Product[] {
       expiryDate: formatDateToIso(pastDate),
       quantity: 4,
       unit: 'tablet',
+      indication: 'Bakteriyel enfeksiyon tedavisinde kullanılan antibiyotik',
       storageCondition: 'dry',
       storageTip: 'Nemden koruyunuz ve kuru yerde saklayınız.',
       prospectusUrl: 'https://www.ilacrehberi.com/v/augmentin-bid-1000-mg-14-film-tablet-552d/kt/',
@@ -104,6 +108,7 @@ function getInitialSampleProducts(): Product[] {
       expiryDate: formatDateToIso(d60),
       quantity: 1,
       unit: 'surup',
+      indication: 'Çocuklarda ateş düşürücü ve hafif/orta şiddetli ağrı kesici',
       storageCondition: 'room_temp',
       storageTip: '25°C altında oda sıcaklığında saklayınız. Buzdolabına koymayınız.',
       prospectusUrl: 'https://www.ilacrehberi.com/v/calpol-120-mg5-ml-150-ml-suspansiyon-368c/kt/',
@@ -118,6 +123,7 @@ function getInitialSampleProducts(): Product[] {
       expiryDate: formatDateToIso(d300),
       quantity: 28,
       unit: 'tablet',
+      indication: 'Kalp ve damar tıkanıklıklarını önleyici kan sulandırıcı',
       storageCondition: 'room_temp',
       storageTip: '25°C altındaki kuru bir yerde saklayınız.',
       prospectusUrl: 'https://www.ilacrehberi.com/v/coraspin-100-mg-30-tablet-4a4b/kt/',
@@ -132,6 +138,7 @@ function getInitialSampleProducts(): Product[] {
       expiryDate: formatDateToIso(d120),
       quantity: 1,
       unit: 'tup',
+      indication: 'Kuru ve tahriş olmuş ciltleri onarıcı ve nemlendirici merhem',
       storageCondition: 'room_temp',
       storageTip: '25°C altında oda sıcaklığında saklayınız.',
       prospectusUrl: 'https://www.ilacrehberi.com/v/bepanthol-30-g-merhem-100c/kt/',
@@ -190,6 +197,21 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       if (saved !== null) {
         currentItems = JSON.parse(saved);
+        // Dolaptaki ilaçlarda indication eksikse otomatik doldur ve kaydet
+        let hasModified = false;
+        currentItems = currentItems.map((item) => {
+          if (!item.indication) {
+            const detected = detectIndication(item.name, item.category);
+            if (detected) {
+              hasModified = true;
+              return { ...item, indication: detected };
+            }
+          }
+          return item;
+        });
+        if (hasModified) {
+          await persistProducts(currentItems);
+        }
         setProducts(currentItems);
       } else if (!hasSeeded) {
         currentItems = getInitialSampleProducts();
@@ -207,8 +229,25 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (cloudResult.products) {
           setIsCloudConnected(true);
           if (cloudResult.products.length > 0) {
-            setProducts(cloudResult.products);
-            await persistProducts(cloudResult.products);
+            // Buluttan gelen veriyle yerel veriyi güvenle birleştir (indication silinmesini önle)
+            const mergedProducts = cloudResult.products.map((cp) => {
+              const localMatch = currentItems.find(
+                (lp) => lp.id === cp.id || (lp.barcode && cp.barcode && lp.barcode === cp.barcode)
+              );
+              const resolvedIndication =
+                cp.indication || localMatch?.indication || detectIndication(cp.name, cp.category);
+              return {
+                ...cp,
+                indication: resolvedIndication || undefined,
+                serialNumber: cp.serialNumber || localMatch?.serialNumber,
+                rawCode: cp.rawCode || localMatch?.rawCode,
+                usageInstructions: cp.usageInstructions || localMatch?.usageInstructions,
+                storageTip: cp.storageTip || localMatch?.storageTip,
+                imageUrl: cp.imageUrl || localMatch?.imageUrl,
+              };
+            });
+            setProducts(mergedProducts);
+            await persistProducts(mergedProducts);
           } else if (!hasSeeded && currentItems.length > 0) {
             for (const item of currentItems) {
               await upsertProductToCloud(item);

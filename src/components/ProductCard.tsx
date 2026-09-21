@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking, Image, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Product, CATEGORIES, FAMILY_MEMBERS } from '../types/product';
 import { getDaysRemaining, getExpiryVisualMeta, formatDisplayDate } from '../utils/dateUtils';
@@ -25,6 +25,37 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const medEmoji = getMedicationEmoji(product.name, product.category);
 
   const isExpired = daysRemaining < 0;
+
+  const handleShareProduct = async () => {
+    const details = [
+      `💊 ${product.name}`,
+      product.indication ? `📌 Ne İçin Kullanılır: ${product.indication}` : null,
+      `📅 Son Kullanma Tarihi: ${formatDisplayDate(product.expiryDate)} (${visualMeta.label})`,
+      `📦 Mevcut Stok: ${product.quantity} ${product.unit}`,
+      `🏷️ Kategori: ${categoryMeta.label}`,
+      `👤 Kime Ait: ${ownerMeta.label}`,
+      product.barcode ? `🔢 Barkod: ${product.barcode}` : null,
+      product.usageInstructions ? `📝 Kullanım Şekli: ${product.usageInstructions}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const shareMessage = `📋 Mendeş Home - İlaç Bilgisi\n\n${details}\n\nSağlıklı günler dileriz! 🌿`;
+
+    try {
+      await Share.share(
+        {
+          title: `İlaç Bilgisi: ${product.name}`,
+          message: shareMessage,
+        },
+        {
+          dialogTitle: `${product.name} - İlaç Bilgisini Paylaş`,
+        }
+      );
+    } catch (error) {
+      console.error('İlaç paylaşım hatası:', error);
+    }
+  };
 
   const handleDeletePress = () => {
     Alert.alert(
@@ -143,16 +174,27 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </View>
       )}
 
-      {/* Alt Aksiyon Butonları: Prospektüs, 1 Azalt, Sil */}
+      {/* Alt Aksiyon Butonları: Prospektüs, Paylaş, 1 Azalt, Sil */}
       <View style={styles.actionsBar}>
-        <TouchableOpacity
-          style={styles.prospectusButton}
-          onPress={handleOpenProspectus}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="document-text-outline" size={14} color="#0284C7" />
-          <Text style={styles.prospectusButtonText}>Prospektüs</Text>
-        </TouchableOpacity>
+        <View style={styles.leftActionGroup}>
+          <TouchableOpacity
+            style={styles.prospectusButton}
+            onPress={handleOpenProspectus}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="document-text-outline" size={13} color="#0284C7" />
+            <Text style={styles.prospectusButtonText}>Prospektüs</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={handleShareProduct}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="share-social-outline" size={13} color="#059669" />
+            <Text style={styles.shareButtonText}>Paylaş</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.rightActionGroup}>
           <TouchableOpacity
@@ -343,21 +385,42 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
+  leftActionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   prospectusButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#BFDBFE',
   },
   prospectusButtonText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#0284C7',
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  shareButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
   },
   rightActionGroup: {
     flexDirection: 'row',
