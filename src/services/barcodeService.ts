@@ -26,6 +26,8 @@ export interface BarcodeLookupResult {
   prospectusUrl?: string;
   imageUrl?: string;
   company?: string;
+  barcode?: string;
+  isItsDataMatrix?: boolean;
   source?: 'its_datamatrix' | 'popular_med_db' | 'titck_official_db' | 'local_med_catalog' | 'manual';
 }
 
@@ -299,76 +301,92 @@ export function parseItsDataMatrix(rawCode: string): ItsDataMatrixParseResult {
     return { isItsDataMatrix: false };
   }
 
-  // Temizleme: Karekod ön ekleri (örn: "]d2", " ", vb.)
   let text = rawCode.trim();
-  if (text.startsWith(']d2') || text.startsWith(']Q3')) {
-    text = text.substring(3).trim();
-  }
+  // 1. Strip AIM Symbology Identifiers (e.g. ]d1, ]d2, ]Q3, ]C1)
+  text = text.replace(/^\][a-zA-Z][0-9]/, '');
+  // 2. Strip leading control characters / non-printable chars (e.g. \x1D, \x1E, \x04)
+  text = text.replace(/^[\x00-\x1F]+/, '');
 
-  // Parantezli format kontrolü: (01)08699525010019(21)...(17)260831(10)...
+  let gtin: string | undefined;
+  let expiryDate: string | undefined;
+  let batchNumber: string | undefined;
+  let serialNumber: string | undefined;
+
+  // 1. Format: Parantezli (Human-Readable GS1) format: (01)...(17)...(10)...(21)...
   if (text.includes('(01)') || text.includes('(17)')) {
-    const gtinMatch = text.match(/\(01\)(\d{14})/);
-    const dateMatch = text.match(/\(17\)(\d{6})/);
-    const batchMatch = text.match(/\(10\)([^()]+)/);
-    const snMatch = text.match(/\(21\)([^()]+)/);
+    const gMatch = text.match(/\(01\)(\d{14})/);
+    const dMatch = text.match(/\(17\)(\d{6})/);
+    const bMatch = text.match(/\(10\)([^()\x1D\s]+)/);
+    const sMatch = text.match(/\(21\)([^()\x1D\s]+)/);
 
-    let expiryFormatted: string | undefined;
-    if (dateMatch && dateMatch[1]) {
-      expiryFormatted = formatGSIExpiryDate(dateMatch[1]);
-    }
-
-    return {
-      isItsDataMatrix: true,
-      gtin: gtinMatch ? gtinMatch[1] : undefined,
-      expiryDate: expiryFormatted,
-      batchNumber: batchMatch ? batchMatch[1].trim() : undefined,
-      serialNumber: snMatch ? snMatch[1].trim() : undefined,
-    };
-  }
-
-  // Standart akış (01 ile başlayan GS ayrılmış veya bitişik İTS metni)
-  // GS karakteri: \x1D, \u001d, veya ASCII 29
-  if (text.startsWith('01') && text.length >= 16) {
-    const gtin = text.substring(2, 16); // 14 hane GTIN
-
-    let expiryFormatted: string | undefined;
-    let batchNumber: string | undefined;
-    let serialNumber: string | undefined;
-
-    // 17 AI (Miad) araması: '17' + 6 hane (YYMMDD)
-    const expRegex = /(?:17|\x1D17)(\d{2})(\d{2})(\d{2})/;
-    const expMatch = text.match(expRegex);
-    if (expMatch) {
-      const yy = expMatch[1];
-      const mm = expMatch[2];
-      const dd = expMatch[3];
-      expiryFormatted = formatGSIExpiryDate(yy + mm + dd);
-    }
-
-    // 10 AI (Parti No) araması
-    const batchRegex = /(?:10|\x1D10)([A-Za-z0-9_\-]+)/;
-    const batchMatch = text.match(batchRegex);
-    if (batchMatch) {
-      batchNumber = batchMatch[1];
-    }
-
-    // 21 AI (Seri No) araması
-    const snRegex = /(?:21|\x1D21)([A-Za-z0-9_\-]+)/;
-    const snMatch = text.match(snRegex);
-    if (snMatch) {
-      serialNumber = snMatch[1];
-    }
+    if (gMatch) gtin = gMatch[1];
+    if (dMatch) expiryDate = formatGSIExpiryDate(dMatch[1]);
+    if (bMatch) batchNumber = bMatch[1].trim();
+    if (sMatch) serialNumber = sMatch[1].trim();
 
     return {
-      isItsDataMatrix: true,
+      isItsDataMatrix: !!(gtin || expiryDate),
       gtin,
-      expiryDate: expiryFormatted,
+      expiryDate,
       batchNumber,
       serialNumber,
     };
   }
 
-  return { isItsDataMatrix: false };
+  // 2. Format: Standart İTS / GS1 DataMatrix Akışı
+  // GTIN tespiti: 01 followed by 14 digits (örn: 0108699525010019)
+  const gtinMatch = text.match(/(?:^|[\x1D\u001d\x1e\x1c\s|])01(\d{14})/);
+  if (gtinMatch) {
+    gtin = gtinMatch[1];
+  } else {
+    const directMatch = text.match(/^01(\d{14})/);
+    if (directMatch) gtin = directMatch[1];
+  }
+
+  // Son Kullanma Tarihi (Miad): 17 AI + 6 hane (YYMMDD)
+  // Durum A: 01'den (14 hane) hemen sonra 17 gelmesi (Türk ilaçlarında çok yaygın)
+  const afterGtinMatch = text.match(/01\d{14}17(\d{2}(?:0[1-9]|1[0-2])(?:[0-2][0-9]|3[01]))/);
+  if (afterGtinMatch) {
+    expiryDate = formatGSIExpiryDate(afterGtinMatch[1]);
+  } else {
+    // Durum B: Ayırıcı karakter (GS, boşluk, pipe vb.) sonrasında 17
+    const delimMatch = text.match(/(?:[\x1D\u001d\x1e\x1c\s|]|^)17(\d{2}(?:0[1-9]|1[0-2])(?:[0-2][0-9]|3[01]))/);
+    if (delimMatch) {
+      expiryDate = formatGSIExpiryDate(delimMatch[1]);
+    } else {
+      // Durum C: Genel arama (17 + geçerli YY + 01-12 ay + 00-31 gün)
+      const fallbackMatch = text.match(/17(\d{2}(?:0[1-9]|1[0-2])(?:[0-2][0-9]|3[01]))/);
+      if (fallbackMatch) {
+        expiryDate = formatGSIExpiryDate(fallbackMatch[1]);
+      }
+    }
+  }
+
+  // Parti / Lot Numarası: 10 AI
+  const batchMatch = text.match(/(?:[\x1D\u001d\x1e\x1c\s|]|^)10([A-Za-z0-9_\-\.]{1,20})/);
+  if (batchMatch) {
+    batchNumber = batchMatch[1];
+  }
+
+  // Seri Numarası: 21 AI
+  const snMatch = text.match(/(?:[\x1D\u001d\x1e\x1c\s|]|^)21([A-Za-z0-9_\-\.]{1,25})/);
+  if (snMatch) {
+    serialNumber = snMatch[1];
+  }
+
+  const isItsDataMatrix = !!(
+    gtin ||
+    expiryDate ||
+    (text.length > 18 && (text.includes('17') || text.includes('01')))
+  );
+
+  return {
+    isItsDataMatrix,
+    gtin,
+    expiryDate,
+    batchNumber,
+    serialNumber,
+  };
 }
 
 /**
@@ -534,6 +552,10 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
         if (fallbackUnit !== 'kutu') resolvedUnit = fallbackUnit;
       }
 
+      const cleanGtin = itsParsed.gtin
+        ? (itsParsed.gtin.startsWith('0') ? itsParsed.gtin.substring(1) : itsParsed.gtin)
+        : (clean.length === 13 || clean.length === 14 ? (clean.startsWith('0') ? clean.substring(1) : clean) : clean);
+
       return {
         found: true,
         name: matched.name,
@@ -544,7 +566,9 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
         prospectusUrl: getProspectusSearchUrl(matched.name),
         expiryDate: itsParsed.expiryDate,
         batchNumber: itsParsed.batchNumber,
-        source: 'titck_official_db',
+        barcode: cleanGtin,
+        isItsDataMatrix: itsParsed.isItsDataMatrix,
+        source: itsParsed.isItsDataMatrix ? 'its_datamatrix' : 'titck_official_db',
       };
     }
   }
@@ -552,6 +576,10 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
   // 5. İlaç adı bulunamadıysa fakat geçerli bir İTS Karekodu taranmışsa:
   // Miad ve parti numarasını yine de doldurarak kullanıcıya hazır sun!
   if (itsParsed.isItsDataMatrix && (itsParsed.expiryDate || itsParsed.gtin)) {
+    const cleanGtin = itsParsed.gtin
+      ? (itsParsed.gtin.startsWith('0') ? itsParsed.gtin.substring(1) : itsParsed.gtin)
+      : clean;
+
     return {
       found: true,
       name: '',
@@ -560,6 +588,8 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
       category: 'painkiller',
       unit: 'kutu',
       quantity: 1,
+      barcode: cleanGtin,
+      isItsDataMatrix: true,
       source: 'its_datamatrix',
     };
   }

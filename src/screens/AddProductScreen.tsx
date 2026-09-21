@@ -197,13 +197,21 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           setExpiryDate(formatDisplayDate(result.expiryDate));
         }
 
-        setBarcode(scannedData);
+        if (result.barcode) {
+          setBarcode(result.barcode);
+        } else {
+          setBarcode(scannedData);
+        }
 
         let msg = 'Barkod başarıyla tanındı!';
-        if (result.source === 'titck_official_db') {
-          msg = 'T.C. Sağlık Bakanlığı (TİTCK) veritabanında bulundu! İlaç adı, kategori ve form otomatik seçildi.';
-        } else if (result.source === 'its_datamatrix') {
-          msg = 'İTS Karekodu başarıyla okundu! Miad ve ilaç bilgileri otomatik dolduruldu.';
+        if (result.isItsDataMatrix || result.source === 'its_datamatrix') {
+          if (result.expiryDate) {
+            msg = `✅ İTS Karekodu okundu! İlaç adı, kategori, form ve Son Kullanma Tarihi (${formatDisplayDate(result.expiryDate)}) otomatik dolduruldu.`;
+          } else {
+            msg = '✅ İTS Karekodu başarıyla okundu! İlaç bilgileri otomatik dolduruldu.';
+          }
+        } else if (result.source === 'titck_official_db') {
+          msg = 'T.C. Sağlık Bakanlığı (TİTCK) veritabanında bulundu! İlaç adı, kategori ve form otomatik seçildi. (İpucu: Kutudaki karekodu okutursanız miad da otomatik dolar)';
         } else if (result.source === 'popular_med_db') {
           msg = 'İlaç veri tabanında bulundu! Kategori ve form otomatik seçildi.';
         } else if (result.source === 'local_med_catalog') {
