@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CategoryType, UnitType, StorageCondition } from '../types/product';
 import { POPULAR_MEDICATIONS, getProspectusSearchUrl } from '../data/medicationData';
+import titckCatalog from '../data/titckCatalog.json';
 
 const CUSTOM_MED_CATALOG_KEY = '@ecza_dolabim_custom_catalog_v1';
 
@@ -24,8 +25,18 @@ export interface BarcodeLookupResult {
   storageTip?: string;
   prospectusUrl?: string;
   imageUrl?: string;
-  source?: 'its_datamatrix' | 'popular_med_db' | 'local_med_catalog' | 'manual';
+  company?: string;
+  source?: 'its_datamatrix' | 'popular_med_db' | 'titck_official_db' | 'local_med_catalog' | 'manual';
 }
+
+interface TitckItem {
+  name: string;
+  category: CategoryType;
+  unit: UnitType;
+  company?: string;
+}
+
+const TITCK_DB: Record<string, TitckItem> = titckCatalog as Record<string, TitckItem>;
 
 /**
  * Türkiye İlaç Takip Sistemi (İTS) GS1 DataMatrix Karekod Ayrıştırıcı
@@ -132,7 +143,6 @@ function formatGSIExpiryDate(yymmdd: string): string | undefined {
   const month = Math.max(1, Math.min(12, mm));
 
   if (dd === 0 || isNaN(dd)) {
-    // 00 günü ayın son günüdür
     const lastDayOfMonth = new Date(year, month, 0).getDate();
     dd = lastDayOfMonth;
   }
@@ -177,6 +187,12 @@ export async function saveBarcodeToLocalCatalog(
 
 /**
  * Taranan barkod veya İTS karekod verisini çözer ve ilaç bilgilerini getirir.
+ *
+ * Arama Sırası:
+ * 1. İTS Karekod (GS1 DataMatrix) Ayrıştırma (GTIN, Miad, Parti No)
+ * 2. Kullanıcının Kendi Kaydettiği Özel Hafıza
+ * 3. Popüler Türk İlaçları Rehberi
+ * 4. T.C. Sağlık Bakanlığı TİTCK Resmi Veritabanı (7.916 Ruhsatlı İlaç)
  */
 export async function fetchProductByBarcode(scannedText: string): Promise<BarcodeLookupResult> {
   const clean = scannedText.trim();
@@ -251,7 +267,30 @@ export async function fetchProductByBarcode(scannedText: string): Promise<Barcod
     }
   }
 
-  // 4. Eğer ilaç adı bulunamadıysa fakat geçerli bir İTS Karekodu taranmışsa:
+  // 4. T.C. Sağlık Bakanlığı TİTCK Resmi İlaç Kataloğu (7.916 İlaç)
+  for (const key of lookupKeys) {
+    const pureKey = key.replace(/\D/g, '');
+    const cleanKey13 = pureKey.startsWith('0') && pureKey.length === 14 ? pureKey.substring(1) : pureKey;
+    const cleanKey14 = pureKey.length === 13 ? '0' + pureKey : pureKey;
+
+    const matched = TITCK_DB[pureKey] || TITCK_DB[cleanKey13] || TITCK_DB[cleanKey14];
+    if (matched) {
+      return {
+        found: true,
+        name: matched.name,
+        category: matched.category || 'other',
+        unit: matched.unit || 'kutu',
+        quantity: 1,
+        company: matched.company,
+        prospectusUrl: getProspectusSearchUrl(matched.name),
+        expiryDate: itsParsed.expiryDate,
+        batchNumber: itsParsed.batchNumber,
+        source: 'titck_official_db',
+      };
+    }
+  }
+
+  // 5. İlaç adı bulunamadıysa fakat geçerli bir İTS Karekodu taranmışsa:
   // Miad ve parti numarasını yine de doldurarak kullanıcıya hazır sun!
   if (itsParsed.isItsDataMatrix && (itsParsed.expiryDate || itsParsed.gtin)) {
     return {

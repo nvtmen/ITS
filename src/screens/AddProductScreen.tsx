@@ -192,10 +192,14 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
         setBarcode(scannedData);
 
         let msg = 'Barkod tanındı!';
-        if (result.source === 'its_datamatrix') {
+        if (result.source === 'titck_official_db') {
+          msg = 'T.C. Sağlık Bakanlığı (TİTCK) veritabanında bulundu! İlaç adı ve bilgileri otomatik dolduruldu.';
+        } else if (result.source === 'its_datamatrix') {
           msg = 'İTS Karekodu başarıyla okundu! Miad ve parti no otomatik dolduruldu.';
         } else if (result.source === 'popular_med_db') {
-          msg = 'İlaç veri tabanında bulundu!';
+          msg = 'İlaç popüler veri tabanında bulundu!';
+        } else if (result.source === 'local_med_catalog') {
+          msg = 'Daha önce kaydettiğiniz ilaç hafızasından tanındı!';
         }
 
         setScanMessage({ type: 'success', text: msg });
