@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.nvt.eczadolabim",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#E0F2FE",
         "foregroundImage": "./assets/android-icon-foreground.png"
