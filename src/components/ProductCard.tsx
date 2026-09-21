@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Product, CATEGORIES, FAMILY_MEMBERS, STORAGE_CONDITIONS } from '../types/product';
+import { Product, CATEGORIES, FAMILY_MEMBERS } from '../types/product';
 import { getDaysRemaining, getExpiryVisualMeta, formatDisplayDate } from '../utils/dateUtils';
 import { getMedicationEmoji, getProspectusSearchUrl } from '../data/medicationData';
 
@@ -61,9 +61,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       onPress={() => onPress?.(product)}
       activeOpacity={0.8}
     >
-      {/* Top Bar: Owner Badge & Form / Quantity */}
+      {/* Top Bar: Sahip Rozeti & Form / Miktar */}
       <View style={styles.topMetaBar}>
-        {/* Family Member Pill */}
         <View
           style={[
             styles.ownerBadge,
@@ -74,7 +73,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <Text style={[styles.ownerText, { color: ownerMeta.color }]}>{ownerMeta.label}</Text>
         </View>
 
-        {/* Quantity & Unit */}
         <View style={styles.quantityBadge}>
           <Text style={styles.quantityText}>
             {product.quantity} {product.unit}
@@ -83,17 +81,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </View>
 
       <View style={styles.mainRow}>
-        {/* Medicine Icon */}
+        {/* İlaç İkonu */}
         <View style={[styles.iconWrapper, { backgroundColor: categoryMeta.bgColor }]}>
           <Text style={styles.emojiText}>{medEmoji}</Text>
         </View>
 
-        {/* Details */}
+        {/* Detaylar */}
         <View style={styles.content}>
           <Text style={styles.name} numberOfLines={2}>
             {product.name}
           </Text>
 
+          {/* Kategori Rozeti */}
           <View style={styles.categoryRow}>
             <View style={[styles.categoryPill, { backgroundColor: categoryMeta.bgColor }]}>
               <Ionicons name={categoryMeta.icon as any} size={11} color={categoryMeta.color} />
@@ -101,32 +100,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 {categoryMeta.label}
               </Text>
             </View>
-
-            {product.storageCondition && STORAGE_CONDITIONS[product.storageCondition] && (
-              <View
-                style={[
-                  styles.storagePill,
-                  { backgroundColor: STORAGE_CONDITIONS[product.storageCondition].bgColor },
-                ]}
-              >
-                <Ionicons
-                  name={STORAGE_CONDITIONS[product.storageCondition].icon as any}
-                  size={10}
-                  color={STORAGE_CONDITIONS[product.storageCondition].color}
-                />
-                <Text
-                  style={[
-                    styles.storageText,
-                    { color: STORAGE_CONDITIONS[product.storageCondition].color },
-                  ]}
-                >
-                  {product.storageCondition === 'refrigerator' ? 'Buzdolabı' : 'Oda Sıcaklığı'}
-                </Text>
-              </View>
-            )}
           </View>
 
-          {/* Expiry Date Row */}
+          {/* Miad (AA.YYYY) Satırı */}
           <View style={styles.dateRow}>
             <Ionicons name="calendar-outline" size={13} color="#6B7280" />
             <Text style={styles.dateText}>Miad: {formatDisplayDate(product.expiryDate)}</Text>
@@ -136,15 +112,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               </Text>
             </View>
           </View>
-
-          {/* Batch number or storage tip if present */}
-          {product.batchNumber ? (
-            <Text style={styles.batchText}>Parti/Seri: {product.batchNumber}</Text>
-          ) : null}
         </View>
       </View>
 
-      {/* Critical Expired Warning Strip */}
+      {/* Miadı Geçmişse Kırmızı Uyarı */}
       {isExpired && (
         <View style={styles.expiredWarningStrip}>
           <Ionicons name="warning" size={13} color="#DC2626" />
@@ -154,7 +125,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </View>
       )}
 
-      {/* Bottom Action Bar: Prospectus Link, Decrement, Delete */}
+      {/* Alt Aksiyon Butonları: Prospektüs, 1 Azalt, Sil */}
       <View style={styles.actionsBar}>
         <TouchableOpacity
           style={styles.prospectusButton}
@@ -268,7 +239,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
     marginBottom: 6,
   },
   categoryPill: {
@@ -282,18 +252,6 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 10.5,
     fontWeight: '700',
-  },
-  storagePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  storageText: {
-    fontSize: 10,
-    fontWeight: '600',
   },
   dateRow: {
     flexDirection: 'row',
@@ -314,11 +272,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
-  },
-  batchText: {
-    fontSize: 10,
-    color: '#9CA3AF',
-    marginTop: 3,
   },
   expiredWarningStrip: {
     flexDirection: 'row',

@@ -21,29 +21,132 @@ import {
   CategoryType,
   UnitType,
   OwnerType,
-  StorageCondition,
   CATEGORIES,
   UNITS,
   FAMILY_MEMBERS,
-  STORAGE_CONDITIONS,
   Product,
 } from '../types/product';
 import {
   parseDate,
   formatDisplayDate,
   applyDateMask,
-  getTurkishReadableDate,
   getDaysRemaining,
   getExpiryVisualMeta,
-  getTodayDisplayDate,
-  addDaysToDisplayDate,
   normalizeTurkish,
 } from '../utils/dateUtils';
 import {
   POPULAR_MEDICATIONS,
   getProspectusSearchUrl,
-  getMedicationEmoji,
 } from '../data/medicationData';
+
+function detectCategoryFromName(name: string): CategoryType {
+  const upper = (name || '').toLocaleUpperCase('tr-TR');
+  if (
+    upper.includes('PAROL') ||
+    upper.includes('ARVELES') ||
+    upper.includes('MAJEZIK') ||
+    upper.includes('DOLOREX') ||
+    upper.includes('APRANAX') ||
+    upper.includes('AGRI') ||
+    upper.includes('ATES')
+  ) {
+    return 'painkiller';
+  }
+  if (
+    upper.includes('AUGMENTIN') ||
+    upper.includes('KLAVUNAT') ||
+    upper.includes('AMOKLAVIN') ||
+    upper.includes('ANTIBIYOTIK') ||
+    upper.includes('SIPRO')
+  ) {
+    return 'antibiotic';
+  }
+  if (
+    upper.includes('CORASPIN') ||
+    upper.includes('TANSIYON') ||
+    upper.includes('INSULIN') ||
+    upper.includes('BELOC') ||
+    upper.includes('LIPITOR') ||
+    upper.includes('KALP')
+  ) {
+    return 'chronic';
+  }
+  if (
+    upper.includes('GRIP') ||
+    upper.includes('SOGUK') ||
+    upper.includes('OKSURUK') ||
+    upper.includes('TYLOL') ||
+    upper.includes('KATARIN') ||
+    upper.includes('NUROFEN') ||
+    upper.includes('OTRIVINE')
+  ) {
+    return 'cold_flu';
+  }
+  if (
+    upper.includes('MIDE') ||
+    upper.includes('NEXIUM') ||
+    upper.includes('LANSOR') ||
+    upper.includes('TALCID') ||
+    upper.includes('GAVISCON') ||
+    upper.includes('RENNIE')
+  ) {
+    return 'digestive';
+  }
+  if (
+    upper.includes('VITAMIN') ||
+    upper.includes('DEVIT') ||
+    upper.includes('BENEXOL') ||
+    upper.includes('FERRUM') ||
+    upper.includes('CINKO') ||
+    upper.includes('B12')
+  ) {
+    return 'vitamin';
+  }
+  if (
+    upper.includes('KREM') ||
+    upper.includes('MERHEM') ||
+    upper.includes('JEL') ||
+    upper.includes('POMAD') ||
+    upper.includes('BEPANTHOL') ||
+    upper.includes('FUCIDIN')
+  ) {
+    return 'ointment';
+  }
+  if (
+    upper.includes('DAMLA') ||
+    upper.includes('GOZ') ||
+    upper.includes('KULAK') ||
+    upper.includes('SPREY')
+  ) {
+    return 'drops';
+  }
+  return 'other';
+}
+
+function detectUnitFromName(name: string): UnitType {
+  const upper = (name || '').toLocaleUpperCase('tr-TR');
+  if (upper.includes('TABLET') || upper.includes('TAB')) return 'tablet';
+  if (upper.includes('KAPSUL') || upper.includes('KAP')) return 'kapsul';
+  if (
+    upper.includes('SURUP') ||
+    upper.includes('SUSPANSIYON') ||
+    upper.includes('ORAL COZELTI') ||
+    upper.includes('LIQUID')
+  ) {
+    return 'surup';
+  }
+  if (
+    upper.includes('KREM') ||
+    upper.includes('MERHEM') ||
+    upper.includes('JEL') ||
+    upper.includes('POMAD')
+  ) {
+    return 'tup';
+  }
+  if (upper.includes('DAMLA') || upper.includes('SPREY')) return 'damla';
+  if (upper.includes('FLAKON') || upper.includes('AMPUL')) return 'flakon';
+  return 'kutu';
+}
 
 export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
   navigation,
@@ -64,12 +167,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
   const [quantity, setQuantity] = useState<string>('1');
   const [unit, setUnit] = useState<UnitType>('kutu');
   const [owner, setOwner] = useState<OwnerType>('GENEL');
-  const [expiryDate, setExpiryDate] = useState<string>('');
-  const [storageCondition, setStorageCondition] = useState<StorageCondition>('room_temp');
-  const [batchNumber, setBatchNumber] = useState<string>('');
+  const [expiryDate, setExpiryDate] = useState<string>(''); // AA.YYYY formatında
   const [prospectusUrl, setProspectusUrl] = useState<string>('');
-  const [usageInstructions, setUsageInstructions] = useState<string>('');
-  const [storageTip, setStorageTip] = useState<string>('');
 
   // Scanner and Lookup states
   const [scannerVisible, setScannerVisible] = useState<boolean>(false);
@@ -87,11 +186,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     setUnit('kutu');
     setOwner('GENEL');
     setExpiryDate('');
-    setStorageCondition('room_temp');
-    setBatchNumber('');
     setProspectusUrl('');
-    setUsageInstructions('');
-    setStorageTip('');
     setScanMessage(null);
     setEntryMode('standard');
     setCatalogSearch('');
@@ -110,11 +205,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       setUnit(item.unit);
       setOwner(item.owner || 'GENEL');
       setExpiryDate(formatDisplayDate(item.expiryDate));
-      setStorageCondition(item.storageCondition || 'room_temp');
-      setBatchNumber(item.batchNumber || '');
       setProspectusUrl(item.prospectusUrl || '');
-      setUsageInstructions(item.usageInstructions || '');
-      setStorageTip(item.storageTip || '');
       setScanMessage(null);
       setEntryMode('standard');
     }
@@ -127,6 +218,17 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     });
     return unsubscribe;
   }, [navigation, resetForm]);
+
+  // Handle name change with auto-detection of category and form/unit
+  const handleNameChange = (text: string) => {
+    setName(text);
+    if (!isEditing && text.trim().length >= 3) {
+      const autoCat = detectCategoryFromName(text);
+      const autoUnit = detectUnitFromName(text);
+      setCategory(autoCat);
+      setUnit(autoUnit);
+    }
+  };
 
   // Popular medications array for catalog quick selection
   const popularMedList = useMemo(() => {
@@ -155,13 +257,11 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     setCategory(item.category);
     setUnit(item.defaultUnit);
     setQuantity(String(item.defaultQty));
-    setStorageCondition(item.storageCondition || 'room_temp');
-    setStorageTip(item.storageTip || '');
     setProspectusUrl(item.prospectusUrl || getProspectusSearchUrl(item.name));
     setEntryMode('standard');
     setScanMessage({
       type: 'success',
-      text: `"${item.name}" seçildi. Miad tarihini kontrol ediniz.`,
+      text: `"${item.name}" seçildi. Kategori ve form otomatik belirlendi.`,
     });
   };
 
@@ -175,29 +275,28 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       const result = await fetchProductByBarcode(scannedData);
 
       if (result.found) {
-        if (result.name) setName(result.name);
-        if (result.category) setCategory(result.category);
-        if (result.unit) setUnit(result.unit);
+        if (result.name) {
+          setName(result.name);
+          setCategory(result.category || detectCategoryFromName(result.name));
+          setUnit(result.unit || detectUnitFromName(result.name));
+        }
         if (result.quantity) setQuantity(String(result.quantity));
-        if (result.storageCondition) setStorageCondition(result.storageCondition);
-        if (result.storageTip) setStorageTip(result.storageTip);
         if (result.prospectusUrl) setProspectusUrl(result.prospectusUrl);
-        if (result.batchNumber) setBatchNumber(result.batchNumber);
 
-        // If ITS datamatrix contains expiry date, set it directly!
+        // If expiry date is present in ITS datamatrix, format as AA.YYYY
         if (result.expiryDate) {
           setExpiryDate(formatDisplayDate(result.expiryDate));
         }
 
         setBarcode(scannedData);
 
-        let msg = 'Barkod tanındı!';
+        let msg = 'Barkod başarıyla tanındı!';
         if (result.source === 'titck_official_db') {
-          msg = 'T.C. Sağlık Bakanlığı (TİTCK) veritabanında bulundu! İlaç adı ve bilgileri otomatik dolduruldu.';
+          msg = 'T.C. Sağlık Bakanlığı (TİTCK) veritabanında bulundu! İlaç adı, kategori ve form otomatik dolduruldu.';
         } else if (result.source === 'its_datamatrix') {
-          msg = 'İTS Karekodu başarıyla okundu! Miad ve parti no otomatik dolduruldu.';
+          msg = 'İTS Karekodu başarıyla okundu! Miad ve ilaç bilgileri otomatik dolduruldu.';
         } else if (result.source === 'popular_med_db') {
-          msg = 'İlaç popüler veri tabanında bulundu!';
+          msg = 'İlaç veri tabanında bulundu! Kategori ve form otomatik belirlendi.';
         } else if (result.source === 'local_med_catalog') {
           msg = 'Daha önce kaydettiğiniz ilaç hafızasından tanındı!';
         }
@@ -207,7 +306,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
         setBarcode(scannedData);
         setScanMessage({
           type: 'info',
-          text: 'Yeni ilaç barkodu. İlaç bilgilerini girip kaydedebilirsiniz.',
+          text: 'Yeni ilaç barkodu. İlaç adını ve miadını girip kaydedebilirsiniz.',
         });
       }
     } catch (error) {
@@ -218,7 +317,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     }
   };
 
-  // Live validation for expiry date
+  // Live validation for expiry date (AA.YYYY)
   const parsedDate = useMemo(() => parseDate(expiryDate), [expiryDate]);
   const isDateValid = parsedDate !== null && !isNaN(parsedDate.getTime());
   const daysRemaining = useMemo(() => {
@@ -230,13 +329,6 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     if (daysRemaining === null) return null;
     return getExpiryVisualMeta(daysRemaining);
   }, [daysRemaining]);
-
-  // Quick Expiry Date Preset Buttons (+3 Ay, +6 Ay, +1 Yıl, +2 Yıl)
-  const setQuickExpiry = (months: number) => {
-    const today = new Date();
-    today.setMonth(today.getMonth() + months);
-    setExpiryDate(formatDisplayDate(today.toISOString().split('T')[0]));
-  };
 
   // Open Prospectus in Phone Browser
   const handleTestProspectus = async () => {
@@ -264,7 +356,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     if (!isDateValid || !parsedDate) {
       Alert.alert(
         'Geçersiz Miad',
-        'Lütfen geçerli bir Son Kullanma Tarihi giriniz (Format: GG.AA.YYYY).'
+        'Lütfen geçerli bir Son Kullanma Tarihi giriniz (Format: AA.YYYY - Örn: 08.2027).'
       );
       return;
     }
@@ -279,8 +371,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
     try {
       const year = parsedDate.getFullYear();
       const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
-      const day = String(parsedDate.getDate()).padStart(2, '0');
-      const isoExpiryDate = `${year}-${month}-${day}`;
+      const isoExpiryDate = `${year}-${month}`; // YYYY-MM
 
       const finalProspectusUrl = prospectusUrl.trim() || getProspectusSearchUrl(cleanName);
 
@@ -293,11 +384,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           quantity: cleanQty,
           unit,
           owner,
-          storageCondition,
-          batchNumber: batchNumber.trim() || undefined,
           prospectusUrl: finalProspectusUrl,
-          usageInstructions: usageInstructions.trim() || undefined,
-          storageTip: storageTip.trim() || undefined,
         });
 
         Alert.alert('Başarılı ✅', 'İlaç bilgileri güncellendi.', [
@@ -312,21 +399,14 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           quantity: cleanQty,
           unit,
           owner,
-          storageCondition,
-          batchNumber: batchNumber.trim() || undefined,
           prospectusUrl: finalProspectusUrl,
-          usageInstructions: usageInstructions.trim() || undefined,
-          storageTip: storageTip.trim() || undefined,
         });
 
-        // Save barcode to local catalog for future instant recognition
         if (barcode.trim()) {
           saveBarcodeToLocalCatalog(barcode.trim(), {
             name: cleanName,
             category,
             unit,
-            storageCondition,
-            storageTip: storageTip.trim(),
             prospectusUrl: finalProspectusUrl,
           });
         }
@@ -342,6 +422,8 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
       setIsSaving(false);
     }
   };
+
+  const categoryMeta = CATEGORIES[category] || CATEGORIES.other;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -365,7 +447,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
           )}
         </View>
 
-        {/* Mode Selector: Barkod / Form vs. Hazır İlaç Kataloğu */}
+        {/* Mode Selector */}
         {!isEditing && (
           <View style={styles.modeTabs}>
             <TouchableOpacity
@@ -414,7 +496,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 <Ionicons name="search" size={18} color="#94A3B8" />
                 <TextInput
                   style={styles.catalogSearchInput}
-                  placeholder="İlaç adı veya kategorisi ara (örn. Parol, Calpol)..."
+                  placeholder="İlaç ara (örn. Parol, Calpol, Arveles)..."
                   placeholderTextColor="#94A3B8"
                   value={catalogSearch}
                   onChangeText={setCatalogSearch}
@@ -422,7 +504,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
               </View>
 
               <Text style={styles.catalogHintText}>
-                Aşağıdaki hazır ilaçlardan birine dokunarak bilgileri anında forma yükleyebilirsiniz:
+                Aşağıdaki hazır ilaçlardan birine dokunarak bilgileri anında yükleyebilirsiniz:
               </Text>
 
               {popularMedList.map((item, idx) => {
@@ -495,7 +577,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   <View>
                     <Text style={styles.scanButtonTitle}>Barkod / İTS Karekodu Tara</Text>
                     <Text style={styles.scanButtonSubtitle}>
-                      Kamera ile kutuyu okutun, miad ve parti otomatik dolsun
+                      Kamera ile okutun, ilaç adı, kategori ve miad otomatik dolsun
                     </Text>
                   </View>
                 </View>
@@ -546,7 +628,7 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </View>
               </View>
 
-              {/* 2. İLAÇ ADI */}
+              {/* 2. İLAÇ ADI (GİRİLDİĞİNDE KATEGORİ VE FORM OTOMATİK BELİRLENİR) */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>İlaç Adı ve Dozu *</Text>
                 <TextInput
@@ -554,57 +636,60 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                   placeholder="Örn: Parol 500 mg Tablet"
                   placeholderTextColor="#94A3B8"
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={handleNameChange}
                 />
               </View>
 
-              {/* 3. MİAD (SON KULLANMA TARİHİ) */}
-              <View style={styles.inputGroup}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={styles.inputLabel}>Miad (Son Kullanma Tarihi) *</Text>
-                  {visualMeta && (
-                    <View style={[styles.visualBadge, { backgroundColor: visualMeta.badgeBg }]}>
-                      <Text style={[styles.visualBadgeText, { color: visualMeta.badgeText }]}>
-                        {visualMeta.label}
-                      </Text>
-                    </View>
-                  )}
+              {/* 3. OTOMATİK BELİRLENEN KATEGORİ VE FORM BİRİMİ */}
+              <View style={styles.autoFilledInfoCard}>
+                <View style={styles.autoFilledRow}>
+                  <Text style={styles.autoFilledLabel}>İlaç Kategorisi:</Text>
+                  <View style={[styles.autoPill, { backgroundColor: categoryMeta.bgColor }]}>
+                    <Ionicons name={categoryMeta.icon as any} size={12} color={categoryMeta.color} />
+                    <Text style={[styles.autoPillText, { color: categoryMeta.color }]}>
+                      {categoryMeta.label}
+                    </Text>
+                  </View>
                 </View>
-                <TextInput
-                  style={[
-                    styles.textInput,
-                    expiryDate && !isDateValid && styles.inputError,
-                    isDateValid && styles.inputSuccess,
-                  ]}
-                  placeholder="GG.AA.YYYY (Örn: 31.12.2027)"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="numeric"
-                  maxLength={10}
-                  value={expiryDate}
-                  onChangeText={(val) => setExpiryDate(applyDateMask(val, expiryDate))}
-                />
 
-                {/* Hızlı Miad Preset Butonları */}
-                <View style={styles.presetButtonsRow}>
-                  <TouchableOpacity style={styles.presetBtn} onPress={() => setQuickExpiry(3)}>
-                    <Text style={styles.presetBtnText}>+3 Ay</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.presetBtn} onPress={() => setQuickExpiry(6)}>
-                    <Text style={styles.presetBtnText}>+6 Ay</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.presetBtn} onPress={() => setQuickExpiry(12)}>
-                    <Text style={styles.presetBtnText}>+1 Yıl</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.presetBtn} onPress={() => setQuickExpiry(24)}>
-                    <Text style={styles.presetBtnText}>+2 Yıl</Text>
-                  </TouchableOpacity>
+                <View style={styles.autoFilledRow}>
+                  <Text style={styles.autoFilledLabel}>Form / Birim:</Text>
+                  <View style={styles.autoPillUnit}>
+                    <Text style={styles.autoPillUnitText}>{unit.toUpperCase()}</Text>
+                  </View>
                 </View>
               </View>
 
-              {/* 4. MİKTAR VE BİRİM */}
+              {/* 4. MİAD (AA.YYYY FORMATINDA) VE MİKTAR */}
               <View style={styles.rowTwoCols}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Miktar / Doz *</Text>
+                <View style={[styles.inputGroup, { flex: 1.4 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.inputLabel}>Miad (AA.YYYY) *</Text>
+                    {visualMeta && (
+                      <View style={[styles.visualBadge, { backgroundColor: visualMeta.badgeBg }]}>
+                        <Text style={[styles.visualBadgeText, { color: visualMeta.badgeText }]}>
+                          {visualMeta.label}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.textInput,
+                      expiryDate && !isDateValid && styles.inputError,
+                      isDateValid && styles.inputSuccess,
+                    ]}
+                    placeholder="AA.YYYY (Örn: 08.2027)"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="numeric"
+                    maxLength={7}
+                    value={expiryDate}
+                    onChangeText={(val) => setExpiryDate(applyDateMask(val, expiryDate))}
+                  />
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 0.8 }]}>
+                  <Text style={styles.inputLabel}>Miktar</Text>
                   <TextInput
                     style={styles.textInput}
                     placeholder="1"
@@ -614,99 +699,9 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                     onChangeText={setQuantity}
                   />
                 </View>
-
-                <View style={[styles.inputGroup, { flex: 1.5 }]}>
-                  <Text style={styles.inputLabel}>Form / Birim</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {UNITS.map((u) => (
-                      <TouchableOpacity
-                        key={u.id}
-                        style={[styles.unitChip, unit === u.id && styles.unitChipSelected]}
-                        onPress={() => setUnit(u.id)}
-                      >
-                        <Text
-                          style={[styles.unitChipText, unit === u.id && styles.unitChipTextSelected]}
-                        >
-                          {u.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
               </View>
 
-              {/* 5. İLAÇ KATEGORİSİ */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>İlaç Kategorisi</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                  {Object.values(CATEGORIES).map((cat) => {
-                    const isSelected = category === cat.id;
-                    return (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[
-                          styles.catOptionChip,
-                          isSelected && { backgroundColor: cat.color, borderColor: cat.color },
-                        ]}
-                        onPress={() => setCategory(cat.id)}
-                      >
-                        <Ionicons
-                          name={cat.icon as any}
-                          size={13}
-                          color={isSelected ? '#FFFFFF' : cat.color}
-                        />
-                        <Text
-                          style={[
-                            styles.catOptionText,
-                            isSelected && { color: '#FFFFFF', fontWeight: '700' },
-                          ]}
-                        >
-                          {cat.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-
-              {/* 6. SAKLAMA KOŞULU */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Saklama Koşulu</Text>
-                <View style={styles.storageGrid}>
-                  {(['room_temp', 'refrigerator', 'dark', 'dry'] as StorageCondition[]).map(
-                    (cond) => {
-                      const isSelected = storageCondition === cond;
-                      const scMeta = STORAGE_CONDITIONS[cond];
-                      return (
-                        <TouchableOpacity
-                          key={cond}
-                          style={[
-                            styles.storageOptionBtn,
-                            isSelected && styles.storageOptionBtnSelected,
-                          ]}
-                          onPress={() => setStorageCondition(cond)}
-                        >
-                          <Ionicons
-                            name={scMeta.icon as any}
-                            size={14}
-                            color={isSelected ? '#0284C7' : '#64748B'}
-                          />
-                          <Text
-                            style={[
-                              styles.storageOptionText,
-                              isSelected && styles.storageOptionTextSelected,
-                            ]}
-                          >
-                            {scMeta.label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    }
-                  )}
-                </View>
-              </View>
-
-              {/* 7. PROSPEKTÜS VE KULLANIM TALİMATI */}
+              {/* 5. PROSPEKTÜS BAĞLANTISI */}
               <View style={styles.inputGroup}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={styles.inputLabel}>Prospektüs Bağlantısı</Text>
@@ -717,47 +712,11 @@ export const AddProductScreen: React.FC<{ navigation: any; route: any }> = ({
                 </View>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Otomatik oluşturulur veya link yapıştırın"
+                  placeholder="İlaç adına göre otomatik oluşturulur"
                   placeholderTextColor="#94A3B8"
                   value={prospectusUrl}
                   onChangeText={setProspectusUrl}
                 />
-              </View>
-
-              {/* 8. KULLANIM NOTU / TARİFİ */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Kullanım Notu (Dozaj / Açıklama)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Örn: Sabah akşam tok karnına 1 tablet"
-                  placeholderTextColor="#94A3B8"
-                  value={usageInstructions}
-                  onChangeText={setUsageInstructions}
-                />
-              </View>
-
-              {/* 9. BARKOD / PARTİ NUMARASI (İSTEĞE BAĞLI) */}
-              <View style={styles.rowTwoCols}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Barkod / GTIN</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="869..."
-                    placeholderTextColor="#94A3B8"
-                    value={barcode}
-                    onChangeText={setBarcode}
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>Parti / Lot No</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="İTS Lot No"
-                    placeholderTextColor="#94A3B8"
-                    value={batchNumber}
-                    onChangeText={setBatchNumber}
-                  />
-                </View>
               </View>
 
               {/* KAYDET BUTONU */}
@@ -976,24 +935,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
   },
-  presetButtonsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 6,
-  },
-  presetBtn: {
-    flex: 1,
+  autoFilledInfoCard: {
     backgroundColor: '#F1F5F9',
-    paddingVertical: 6,
-    borderRadius: 6,
-    alignItems: 'center',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    gap: 6,
   },
-  presetBtnText: {
+  autoFilledRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  autoFilledLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  autoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  autoPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
+  },
+  autoPillUnit: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  autoPillUnitText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
   },
   visualBadge: {
     paddingHorizontal: 6,
@@ -1007,71 +989,6 @@ const styles = StyleSheet.create({
   rowTwoCols: {
     flexDirection: 'row',
     gap: 10,
-  },
-  unitChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  unitChipSelected: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  unitChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  unitChipTextSelected: {
-    color: '#FFFFFF',
-  },
-  catOptionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  catOptionText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  storageGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  storageOptionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  storageOptionBtnSelected: {
-    backgroundColor: '#E0F2FE',
-    borderColor: '#38BDF8',
-  },
-  storageOptionText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  storageOptionTextSelected: {
-    color: '#0369A1',
-    fontWeight: '700',
   },
   testProspectusBtn: {
     flexDirection: 'row',

@@ -1,11 +1,33 @@
 import { ExpiryStatus } from '../types/product';
 
 /**
- * Parses either DD.MM.YYYY, DD-MM-YYYY, or YYYY-MM-DD into a valid Date object.
+ * Parses MM.YYYY, YYYY-MM, DD.MM.YYYY, or YYYY-MM-DD into a valid Date object.
+ * When MM.YYYY is provided, it resolves to the LAST day of that month (pharmaceutical standard).
  */
 export function parseDate(dateStr: string): Date | null {
   const clean = dateStr.trim();
   if (!clean) return null;
+
+  // Check MM.YYYY or MM-YYYY or MM/YYYY (Format: AA.YYYY)
+  if (/^\d{1,2}[.\-/]\d{4}$/.test(clean)) {
+    const separator = clean.includes('.') ? '.' : clean.includes('-') ? '-' : '/';
+    const parts = clean.split(separator);
+    const month = parseInt(parts[0], 10);
+    const year = parseInt(parts[1], 10);
+    if (month < 1 || month > 12) return null;
+    const lastDay = new Date(year, month, 0).getDate();
+    return new Date(year, month - 1, lastDay);
+  }
+
+  // Check YYYY-MM
+  if (/^\d{4}-\d{2}$/.test(clean)) {
+    const parts = clean.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    if (month < 1 || month > 12) return null;
+    const lastDay = new Date(year, month, 0).getDate();
+    return new Date(year, month - 1, lastDay);
+  }
 
   // Check DD.MM.YYYY or DD-MM-YYYY or DD/MM/YYYY
   if (/^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{4}$/.test(clean)) {
@@ -31,7 +53,6 @@ export function parseDate(dateStr: string): Date | null {
 
 /**
  * Calculates days remaining until the given expiry date string.
- * Supports both DD.MM.YYYY and YYYY-MM-DD.
  * Negative values mean the date has already passed.
  */
 export function getDaysRemaining(expiryDateStr: string): number {
@@ -46,16 +67,10 @@ export function getDaysRemaining(expiryDateStr: string): number {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
-/**
- * Categorizes product into color codes based on days remaining:
- * - Red (expired / critical): <= 1 day
- * - Yellow (warning): 2 - 3 days
- * - Green (safe): 4+ days
- */
 export function getExpiryStatus(daysRemaining: number): ExpiryStatus {
   if (daysRemaining < 0) return 'expired';
-  if (daysRemaining <= 1) return 'critical';
-  if (daysRemaining <= 3) return 'warning';
+  if (daysRemaining <= 7) return 'critical';
+  if (daysRemaining <= 30) return 'warning';
   return 'safe';
 }
 
@@ -80,7 +95,7 @@ export function getExpiryVisualMeta(daysRemaining: number): ExpiryVisualMeta {
   if (daysRemaining === 0) {
     return {
       status: 'critical',
-      label: 'Bugün miadı doluyor!',
+      label: 'Bugün son gün!',
       badgeBg: '#FEE2E2',
       badgeText: '#B91C1C',
       borderColor: '#EF4444',
@@ -114,111 +129,46 @@ export function getExpiryVisualMeta(daysRemaining: number): ExpiryVisualMeta {
 }
 
 /**
- * Formats any date into Turkish readable format DD.MM.YYYY (Gün.Ay.Yıl)
+ * Formats date into pharmaceutical standard AA.YYYY (Ay.Yıl, örn: 08.2027)
  */
 export function formatDisplayDate(dateStr: string): string {
   const parsed = parseDate(dateStr);
   if (!parsed || isNaN(parsed.getTime())) return dateStr;
-  return formatDateToTurkish(parsed);
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const year = parsed.getFullYear();
+  return `${month}.${year}`;
 }
 
 /**
- * Formats a Date object to DD.MM.YYYY (Gün.Ay.Yıl)
- */
-export function formatDateToTurkish(date: Date): string {
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = date.getFullYear();
-  return `${day}.${month}.${year}`;
-}
-
-/**
- * Formats a Date object to ISO YYYY-MM-DD
+ * Formats a Date object to ISO YYYY-MM
  */
 export function formatDateToIso(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-const TURKISH_MONTHS = [
-  'Ocak',
-  'Şubat',
-  'Mart',
-  'Nisan',
-  'Mayıs',
-  'Haziran',
-  'Temmuz',
-  'Ağustos',
-  'Eylül',
-  'Ekim',
-  'Kasım',
-  'Aralık',
-];
-
-/**
- * Returns human-readable Turkish date like "20 Eylül 2026"
- */
-export function getTurkishReadableDate(date: Date): string {
-  const day = date.getDate();
-  const monthName = TURKISH_MONTHS[date.getMonth()] || '';
-  const year = date.getFullYear();
-  return `${day} ${monthName} ${year}`;
+  return `${year}-${month}`;
 }
 
 /**
- * Applies a strict GG.AA.YYYY mask as user enters numbers.
- * Automatically adds '.' after 2nd and 4th digits, and handles backspace gracefully.
+ * Applies a strict AA.YYYY mask as user enters numbers (max 6 digits: 2 month, 4 year).
+ * E.g: "082027" -> "08.2027"
  */
 export function applyDateMask(text: string, prevText: string = ''): string {
-  // If user is deleting (backspace)
   if (prevText && text.length < prevText.length) {
-    // If the deleted char was a dot, remove the preceding digit as well
     if (prevText.endsWith('.') && !text.endsWith('.')) {
       return text.slice(0, -1);
     }
     return text;
   }
 
-  // Extract only numbers
-  const rawDigits = text.replace(/\D/g, '').slice(0, 8);
+  const rawDigits = text.replace(/\D/g, '').slice(0, 6);
   if (rawDigits.length === 0) return '';
   if (rawDigits.length < 2) return rawDigits;
   if (rawDigits.length === 2) return `${rawDigits}.`;
-  if (rawDigits.length < 4) return `${rawDigits.slice(0, 2)}.${rawDigits.slice(2)}`;
-  if (rawDigits.length === 4) return `${rawDigits.slice(0, 2)}.${rawDigits.slice(2, 4)}.`;
-  return `${rawDigits.slice(0, 2)}.${rawDigits.slice(2, 4)}.${rawDigits.slice(4, 8)}`;
+  return `${rawDigits.slice(0, 2)}.${rawDigits.slice(2, 6)}`;
 }
 
 /**
- * Returns today's date formatted as GG.AA.YYYY
- */
-export function getTodayDisplayDate(): string {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  return `${day}.${month}.${year}`;
-}
-
-/**
- * Adds a given number of days to a GG.AA.YYYY (or YYYY-MM-DD) date string
- * and returns the new date formatted as GG.AA.YYYY.
- */
-export function addDaysToDisplayDate(baseDateStr: string, days: number): string {
-  const parsed = parseDate(baseDateStr) || new Date();
-  const target = new Date(parsed.getTime());
-  target.setDate(target.getDate() + days);
-  const day = String(target.getDate()).padStart(2, '0');
-  const month = String(target.getMonth() + 1).padStart(2, '0');
-  const year = target.getFullYear();
-  return `${day}.${month}.${year}`;
-}
-
-/**
- * Normalizes Turkish characters and lowercases text for fuzzy/tolerant search.
- * Handles ı/i, ğ/g, ü/u, ş/s, ö/o, ç/c.
+ * Normalizes Turkish characters for fuzzy search
  */
 export function normalizeTurkish(text: string): string {
   if (!text) return '';
@@ -232,5 +182,3 @@ export function normalizeTurkish(text: string): string {
     .replace(/ç/g, 'c')
     .trim();
 }
-
-
