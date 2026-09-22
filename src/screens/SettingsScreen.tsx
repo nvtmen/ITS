@@ -22,17 +22,33 @@ import {
   FamilyPhoneMap,
   DEFAULT_FAMILY_PHONES,
 } from '../services/whatsappService';
+import {
+  signInInteractive,
+  signOutGoogle,
+  initGoogleAuth,
+} from '../services/googleAuthService';
 import appConfig from '../../app.json';
 
 const CUSTOM_MED_CATALOG_KEY = '@ecza_dolabim_custom_catalog_v1';
 const NOTIFICATIONS_ENABLED_KEY = '@ecza_dolabim_notif_enabled_v1';
 
 export const SettingsScreen: React.FC = () => {
-  const { products, refreshProducts, clearAllProducts } = useProducts();
+  const {
+    products,
+    refreshProducts,
+    clearAllProducts,
+    isDriveConnected,
+    driveUser,
+    lastDriveBackupTime,
+    backupToGoogleDrive,
+    restoreFromGoogleDrive,
+    checkGoogleDriveSession,
+  } = useProducts();
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(true);
   const [learnedCount, setLearnedCount] = useState<number>(0);
   const [familyPhones, setFamilyPhones] = useState<FamilyPhoneMap>(DEFAULT_FAMILY_PHONES);
   const [isSavingPhones, setIsSavingPhones] = useState<boolean>(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState<boolean>(false);
 
   useEffect(() => {
     loadSettings();
@@ -56,6 +72,94 @@ export const SettingsScreen: React.FC = () => {
     } catch (e) {
       console.warn('Ayarlar yüklenirken hata:', e);
     }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsGoogleLoading(true);
+      const user = await signInInteractive();
+      if (user) {
+        await checkGoogleDriveSession();
+        Alert.alert(
+          'Bağlantı Başarılı ✅',
+          `Hoş geldiniz ${user.user.name || user.user.email}!\nGoogle Drive AppData otomatik sessiz yedekleme aktif edildi.`
+        );
+      }
+    } catch (err: any) {
+      Alert.alert('Bağlantı Hatası', err.message || 'Google ile giriş yapılamadı.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleSignOut = () => {
+    Alert.alert(
+      'Google Hesabından Çıkış',
+      'Google Drive otomatik yedekleme bağlantısı kesilsin mi?',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Çıkış Yap',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsGoogleLoading(true);
+              await signOutGoogle();
+              await checkGoogleDriveSession();
+              Alert.alert('Çıkış Yapıldı', 'Google hesabı bağlantısı kesildi.');
+            } catch (e: any) {
+              Alert.alert('Hata', e.message);
+            } finally {
+              setIsGoogleLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleManualDriveBackup = async () => {
+    try {
+      setIsGoogleLoading(true);
+      const res = await backupToGoogleDrive();
+      if (res.success) {
+        Alert.alert('Yedekleme Başarılı ✅', `${products.length} adet ilaç Google Drive AppData klasörüne güvenle yedeklendi.`);
+      } else {
+        Alert.alert('Yedekleme Uyarısı', res.error || 'Yedekleme tamamlanamadı.');
+      }
+    } catch (e: any) {
+      Alert.alert('Hata', e.message);
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleManualDriveRestore = () => {
+    Alert.alert(
+      'Google Drive Yedeğinden Geri Yükle',
+      'Drive AppData klasöründeki son kaydedilen yedek indirilip yerel ecza dolabına yüklenecektir. Devam edilsin mi?',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Geri Yükle',
+          onPress: async () => {
+            try {
+              setIsGoogleLoading(true);
+              const res = await restoreFromGoogleDrive();
+              if (res.success) {
+                Alert.alert('Geri Yükleme Başarılı ✅', `${res.count} adet ilaç Drive yedeğinden başarıyla geri yüklendi.`);
+              } else {
+                Alert.alert('Geri Yüklenemedi', res.error || 'Drive klasöründe geçerli bir yedek bulunamadı.');
+              }
+            } catch (e: any) {
+              Alert.alert('Hata', e.message);
+            } finally {
+              setIsGoogleLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleSavePhones = async () => {
@@ -165,6 +269,136 @@ export const SettingsScreen: React.FC = () => {
               </View>
               <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Section: Google Drive AppData Otomatik Yedekleme */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>GOOGLE DRIVE BULUT YEDEKLEME (APPDATA)</Text>
+          <View style={styles.card}>
+            {isDriveConnected && driveUser ? (
+              <>
+                <View style={styles.driveAccountRow}>
+                  <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
+                    <Ionicons name="logo-google" size={20} color="#0284C7" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.driveUserName}>{driveUser.name || 'Google Kullanıcısı'}</Text>
+                      <View style={styles.activeBadge}>
+                        <Text style={styles.activeBadgeText}>Oto-Yedekleme Açık</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.driveUserEmail}>{driveUser.email}</Text>
+                    <Text style={styles.driveBackupStatusText}>
+                      {lastDriveBackupTime
+                        ? `Son yedek: ${new Date(lastDriveBackupTime).toLocaleDateString('tr-TR', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}`
+                        : 'Henüz Drive yedeği alınmadı'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                {/* Drive AppData info note */}
+                <View style={styles.driveInfoBox}>
+                  <Ionicons name="shield-checkmark" size={15} color="#0369A1" />
+                  <Text style={styles.driveInfoText}>
+                    İlaçlar gizli <Text style={{ fontWeight: '700' }}>AppData</Text> klasöründe sessizce saklanır. Bir kez giriş yaptıktan sonra her veri değişiminde arka planda otomatik kaydedilir.
+                  </Text>
+                </View>
+
+                <View style={styles.divider} />
+
+                {/* Manuel Drive Yedekleme Butonu */}
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={handleManualDriveBackup}
+                  disabled={isGoogleLoading}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
+                      <Ionicons name="cloud-upload-outline" size={20} color="#16A34A" />
+                    </View>
+                    <View>
+                      <Text style={styles.rowTitle}>Şimdi Drive'a Yedekle</Text>
+                      <Text style={styles.rowDesc}>{products.length} ilacı Drive AppData klasörüne kaydet</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <View style={styles.divider} />
+
+                {/* Manuel Drive Geri Yükleme Butonu */}
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={handleManualDriveRestore}
+                  disabled={isGoogleLoading}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
+                      <Ionicons name="cloud-download-outline" size={20} color="#0284C7" />
+                    </View>
+                    <View>
+                      <Text style={styles.rowTitle}>Drive Yedeğinden Geri Yükle</Text>
+                      <Text style={styles.rowDesc}>Gizli klasördeki son yedeği telefona aktar</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                <View style={styles.divider} />
+
+                {/* Çıkış Yap Butonu */}
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={handleGoogleSignOut}
+                  disabled={isGoogleLoading}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.iconBox, { backgroundColor: '#F8FAFC' }]}>
+                      <Ionicons name="log-out-outline" size={18} color="#64748B" />
+                    </View>
+                    <View>
+                      <Text style={[styles.rowTitle, { color: '#64748B' }]}>Google Hesabından Çık</Text>
+                      <Text style={styles.rowDesc}>Yedekleme bağlantısını durdur</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.driveConnectBox}>
+                <View style={[styles.iconBoxLarge, { backgroundColor: '#EFF6FF' }]}>
+                  <Ionicons name="logo-google" size={26} color="#0284C7" />
+                </View>
+                <Text style={styles.driveConnectTitle}>Google ile Tam Otomatik Yedekleme</Text>
+                <Text style={styles.driveConnectDesc}>
+                  Bir kez bağlanın; ilaçlarınız Google Drive'ın size özel gizli AppData klasöründe her zaman sessizce güvende kalsın. Uygulamayı silseniz bile tekrar yüklediğinizde anında geri yüklenir.
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.googleSignInBtn, isGoogleLoading && styles.googleSignInBtnDisabled]}
+                  onPress={handleGoogleSignIn}
+                  disabled={isGoogleLoading}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="logo-google" size={18} color="#FFFFFF" />
+                  <Text style={styles.googleSignInBtnText}>
+                    {isGoogleLoading ? 'Bağlanılıyor...' : 'Google ile Bağlan'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
 
@@ -568,6 +802,111 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
   },
   savePhonesBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  driveAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+  },
+  driveUserName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  driveUserEmail: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  driveBackupStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
+    marginTop: 3,
+  },
+  activeBadge: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  activeBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  driveInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 8,
+    padding: 10,
+    marginVertical: 4,
+    gap: 8,
+  },
+  driveInfoText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#0369A1',
+    lineHeight: 16,
+  },
+  driveConnectBox: {
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+  },
+  iconBoxLarge: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  driveConnectTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  driveConnectDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 17,
+    marginBottom: 14,
+    paddingHorizontal: 6,
+  },
+  googleSignInBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0284C7',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    gap: 8,
+    width: '100%',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  googleSignInBtnDisabled: {
+    backgroundColor: '#94A3B8',
+    shadowOpacity: 0,
+  },
+  googleSignInBtnText: {
     fontSize: 13.5,
     fontWeight: '800',
     color: '#FFFFFF',

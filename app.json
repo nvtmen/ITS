@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ecza Dolabım",
     "slug": "BDT",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.nvt.eczadolabim",
-      "versionCode": 7,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#E0F2FE",
         "foregroundImage": "./assets/android-icon-foreground.png"
@@ -24,7 +24,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
       ]
     },
     "web": {
@@ -44,7 +46,8 @@
           "icon": "./assets/icon.png",
           "color": "#10B981"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "updates": {
       "url": "https://u.expo.dev/5043b071-e9d2-4a92-bab2-690fdbbd8570"

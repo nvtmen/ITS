@@ -18,6 +18,16 @@ import {
   subscribeToCloudChanges,
 } from '../services/cloudSyncService';
 import { isSupabaseConfigured } from '../config/supabase';
+import {
+  signInSilently,
+  getCachedUser,
+  getHasEverSignedIn,
+} from '../services/googleAuthService';
+import {
+  uploadBackup,
+  downloadLatestBackup,
+  getLastBackupTime,
+} from '../services/googleDriveService';
 
 const STORAGE_KEY = '@ecza_dolabim_products_v1';
 const SEEDED_FLAG_KEY = '@ecza_dolabim_has_seeded_v1';
@@ -26,6 +36,9 @@ interface ProductContextType {
   products: Product[];
   isLoading: boolean;
   isCloudConnected: boolean;
+  isDriveConnected: boolean;
+  driveUser: any | null;
+  lastDriveBackupTime: string | null;
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'notificationId'>) => Promise<Product>;
   deleteProduct: (id: string) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
@@ -33,6 +46,9 @@ interface ProductContextType {
   getExpiringSoonProducts: (days: number) => Product[];
   refreshProducts: () => Promise<void>;
   clearAllProducts: () => Promise<void>;
+  backupToGoogleDrive: () => Promise<{ success: boolean; error?: string; timestamp?: string }>;
+  restoreFromGoogleDrive: () => Promise<{ success: boolean; count: number; error?: string }>;
+  checkGoogleDriveSession: () => Promise<void>;
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined);
@@ -157,9 +173,58 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(false);
+  const [isDriveConnected, setIsDriveConnected] = useState<boolean>(false);
+  const [driveUser, setDriveUser] = useState<any | null>(null);
+  const [lastDriveBackupTime, setLastDriveBackupTimeState] = useState<string | null>(null);
+
+  // Debounced auto backup ref
+  const backupTimeoutRef = React.useRef<any>(null);
+
+  const triggerDebouncedDriveBackup = (latestProducts: Product[]) => {
+    if (backupTimeoutRef.current) {
+      clearTimeout(backupTimeoutRef.current);
+    }
+    backupTimeoutRef.current = setTimeout(async () => {
+      try {
+        const hasSignedIn = await getHasEverSignedIn();
+        if (hasSignedIn) {
+          const res = await uploadBackup(latestProducts);
+          if (res.success && res.timestamp) {
+            setLastDriveBackupTimeState(res.timestamp);
+          }
+        }
+      } catch (e) {
+        console.warn('[ProductContext] Debounced drive backup warning:', e);
+      }
+    }, 2500);
+  };
+
+  const checkGoogleDriveSession = async () => {
+    try {
+      const cached = await getCachedUser();
+      if (cached) {
+        setDriveUser(cached);
+        setIsDriveConnected(true);
+      }
+      const lastTime = await getLastBackupTime();
+      setLastDriveBackupTimeState(lastTime);
+
+      const hasEver = await getHasEverSignedIn();
+      if (hasEver) {
+        const user = await signInSilently();
+        if (user) {
+          setDriveUser(user.user);
+          setIsDriveConnected(true);
+        }
+      }
+    } catch (e) {
+      console.warn('[ProductContext] checkGoogleDriveSession warning:', e);
+    }
+  };
 
   useEffect(() => {
     loadProducts();
+    checkGoogleDriveSession();
 
     // Setup realtime listener for family sync
     const unsubscribe = subscribeToCloudChanges(
@@ -269,6 +334,26 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
           setIsCloudConnected(false);
         }
       }
+
+      // 3. Google Drive AppData Sessiz Geri Yükleme Kontrolü
+      // Eğer yerel veritabanında hiç ilaç yoksa ve kullanıcı daha önce Google ile giriş yapmışsa,
+      // Drive AppData klasöründeki yedeği sessizce indirip yükle
+      if (currentItems.length === 0) {
+        try {
+          const hasSignedIn = await getHasEverSignedIn();
+          if (hasSignedIn) {
+            const driveBackup = await downloadLatestBackup();
+            if (driveBackup && driveBackup.products && driveBackup.products.length > 0) {
+              currentItems = driveBackup.products;
+              setProducts(currentItems);
+              await persistProducts(currentItems);
+              console.log(`[GoogleDrive] Silent restore completed: ${currentItems.length} items.`);
+            }
+          }
+        } catch (driveErr) {
+          console.warn('[GoogleDrive] Silent restore warning:', driveErr);
+        }
+      }
     } catch (error) {
       console.error('Error loading medications:', error);
     } finally {
@@ -327,6 +412,7 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
     const updated = [newProduct, ...products];
     setProducts(updated);
     await persistProducts(updated);
+    triggerDebouncedDriveBackup(updated);
 
     if (isSupabaseConfigured()) {
       upsertProductToCloud(newProduct).catch((err) =>
@@ -349,6 +435,7 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
     const updated = products.filter((p) => p.id !== id);
     setProducts(updated);
     await persistProducts(updated);
+    triggerDebouncedDriveBackup(updated);
 
     if (isSupabaseConfigured()) {
       deleteProductFromCloud(id).catch((err) =>
@@ -402,6 +489,7 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     setProducts(updated);
     await persistProducts(updated);
+    triggerDebouncedDriveBackup(updated);
 
     if (isSupabaseConfigured() && targetUpdated) {
       upsertProductToCloud(targetUpdated).catch((err) =>
@@ -447,9 +535,48 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     setProducts([]);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+    triggerDebouncedDriveBackup([]);
 
     if (isSupabaseConfigured()) {
       await clearAllProductsFromCloud();
+    }
+  };
+
+  const backupToGoogleDrive = async (): Promise<{ success: boolean; error?: string; timestamp?: string }> => {
+    try {
+      const res = await uploadBackup(products);
+      if (res.success && res.timestamp) {
+        setLastDriveBackupTimeState(res.timestamp);
+      }
+      return res;
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  const restoreFromGoogleDrive = async (): Promise<{ success: boolean; count: number; error?: string }> => {
+    try {
+      const backup = await downloadLatestBackup();
+      if (!backup || !Array.isArray(backup.products)) {
+        return { success: false, count: 0, error: 'Google Drive AppData klasöründe yedek dosyası bulunamadı.' };
+      }
+
+      setProducts(backup.products);
+      await persistProducts(backup.products);
+      if (backup.timestamp) {
+        setLastDriveBackupTimeState(backup.timestamp);
+      }
+
+      // If Supabase is connected, sync restored items to cloud as well
+      if (isSupabaseConfigured()) {
+        for (const item of backup.products) {
+          await upsertProductToCloud(item);
+        }
+      }
+
+      return { success: true, count: backup.products.length };
+    } catch (err: any) {
+      return { success: false, count: 0, error: err.message };
     }
   };
 
@@ -459,6 +586,9 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
         products,
         isLoading,
         isCloudConnected,
+        isDriveConnected,
+        driveUser,
+        lastDriveBackupTime,
         addProduct,
         deleteProduct,
         updateProduct,
@@ -466,6 +596,9 @@ export const ProductProvider: React.FC<{ children: ReactNode }> = ({ children })
         getExpiringSoonProducts,
         refreshProducts,
         clearAllProducts,
+        backupToGoogleDrive,
+        restoreFromGoogleDrive,
+        checkGoogleDriveSession,
       }}
     >
       {children}
